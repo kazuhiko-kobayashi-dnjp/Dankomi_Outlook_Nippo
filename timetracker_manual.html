@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TimeTracker自動登録スクリプト 使い方</title>
+<style>
+  body { font-family: "Meiryo", "Yu Gothic", sans-serif; max-width: 960px; margin: 0 auto; padding: 24px; background: #f5f6fa; color: #222; }
+  h1   { font-size: 1.6em; border-bottom: 3px solid #0078d4; padding-bottom: 8px; }
+  h2   { font-size: 1.2em; border-left: 4px solid #0078d4; padding-left: 10px; margin-top: 32px; }
+  h3   { font-size: 1.05em; color: #0078d4; margin-top: 20px; }
+  pre  { background: #1e1e1e; color: #d4d4d4; padding: 14px 18px; border-radius: 6px; overflow-x: auto; font-size: 0.92em; line-height: 1.5; }
+  code { background: #e8eaf0; padding: 2px 5px; border-radius: 3px; font-family: Consolas, monospace; font-size: 0.93em; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+  th, td { border: 1px solid #ccc; padding: 7px 12px; text-align: left; font-size: 0.95em; }
+  th { background: #0078d4; color: #fff; }
+  tr:nth-child(even) { background: #f0f4ff; }
+  .note  { background: #fff8e1; border-left: 4px solid #f0a500; padding: 10px 14px; border-radius: 4px; margin: 10px 0; }
+  .tip   { background: #e8f5e9; border-left: 4px solid #43a047; padding: 10px 14px; border-radius: 4px; margin: 10px 0; }
+  .warn  { background: #fdecea; border-left: 4px solid #e53935; padding: 10px 14px; border-radius: 4px; margin: 10px 0; }
+  .file  { font-family: Consolas, monospace; background: #e8eaf0; padding: 2px 6px; border-radius: 3px; }
+  .badge { display: inline-block; background: #0078d4; color: #fff; font-size: 0.78em; padding: 2px 7px; border-radius: 10px; vertical-align: middle; margin-left: 6px; }
+  details summary { cursor: pointer; font-weight: bold; padding: 6px 0; }
+  details[open] summary { color: #0078d4; }
+</style>
+</head>
+<body>
+
+<h1>TimeTracker 自動登録スクリプト 使い方</h1>
+<p>日報の <strong>＜業務計画＞</strong> セクションを読み取り、TimeTrackerNX に実績を自動登録するスクリプトです。</p>
+
+<!-- ============================================================ -->
+<h2>📁 ファイル構成</h2>
+<table>
+  <tr><th>ファイル</th><th>役割</th></tr>
+  <tr><td class="file">tt.ps1</td><td><strong>ワンコマンド実行スクリプト（日常使いはこれ）</strong></td></tr>
+  <tr><td class="file">tt_apikey.txt</td><td>APIキー保存ファイル（初回のみ編集）</td></tr>
+  <tr><td class="file">timetracker_register.py</td><td>メインスクリプト（日報パース → API登録）</td></tr>
+  <tr><td class="file">timetracker_config.json</td><td>設定ファイル（ここを編集して分類ルールを変更）</td></tr>
+  <tr><td class="file">output/tt_delete_date.py</td><td>指定日の実績を全削除するユーティリティ</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2>🚀 日常の使い方（tt.ps1）</h2>
+<p><span class="file">tt.ps1</span> はAPIキーセット・登録実行をワンコマンドにまとめたスクリプトです。</p>
+
+<h3>初回セットアップ（一度だけ）</h3>
+<p><span class="file">tt_apikey.txt</span> の1行目にAPIキーを書いておくだけ。以降は自動で読み込まれます。</p>
+<pre># tt_apikey.txt の中身（例）
+e03bc76e-2f30-4edd-bd45-7ab44a55282d</pre>
+<div class="note">APIキーを再生成したときは <span class="file">tt_apikey.txt</span> の1行だけ書き換えれば OK。</div>
+
+<h3>コマンド一覧</h3>
+<table>
+  <tr><th>コマンド</th><th>動作</th></tr>
+  <tr><td><code>.\tt.ps1</code></td><td>本日の日報を登録（APIキー自動セット → 即 EXECUTE）</td></tr>
+  <tr><td><code>.\tt.ps1 260624</code></td><td>日付指定して登録（YYMMDD形式）</td></tr>
+  <tr><td><code>.\tt.ps1 260624 -Dry</code></td><td>dry-run（APIは叩かず分類結果だけ確認）</td></tr>
+</table>
+<div class="warn">
+  <strong>注意：</strong> <code>--dry</code>（ダブルダッシュ）は PowerShell では認識されません。<br>
+  必ず <code>-Dry</code>（シングルダッシュ）を使ってください。
+</div>
+
+<h3>重複エラーが出た場合（再登録）</h3>
+<pre># 既存データを削除してから再登録
+python output\tt_delete_date.py 2026-06-24
+.\tt.ps1 260624</pre>
+
+<!-- ============================================================ -->
+<h2>⚡ 直接 Python で実行する場合</h2>
+
+<h3>① APIキーをセット</h3>
+<pre>$env:TT_API_KEY = "your-api-key-here"</pre>
+<div class="note">tt.ps1 を使う場合はこの手順は不要です。</div>
+
+<h3>② dry-run（内容確認）</h3>
+<pre># Outlookソース（デフォルト）
+python timetracker_register.py --date 260623
+
+# 日報ソース
+python timetracker_register.py --date 260623 --source diary</pre>
+
+<h3>③ 実際に登録</h3>
+<pre># Outlookソース（デフォルト）
+python timetracker_register.py --date 260623 --execute
+
+# 日報ソース
+python timetracker_register.py --date 260623 --source diary --execute</pre>
+<div class="warn">登録済みの日付に再実行すると <strong>重複エラー</strong> になります。先に削除してから再登録してください（後述）。</div>
+
+<!-- ============================================================ -->
+<h2>🗑️ 登録済みデータの削除</h2>
+<pre># 2026-06-22 の実績を全削除
+python output\tt_delete_date.py 2026-06-22</pre>
+<div class="note">削除後は再度 <code>.\tt.ps1</code> または <code>--execute</code> で登録できます。</div>
+
+<!-- ============================================================ -->
+<h2>🔀 分類ロジック（2段階マッピング）</h2>
+<p>活動内容を <strong>プロジェクト</strong> と <strong>作業種別</strong> の2段階で分類し、workItemId を決定します。</p>
+
+<pre>活動テキスト
+  ↓ project_rules で評価（上から順）
+プロジェクトコード (JPQG1275 など)
+  ↓ worktype_rules で評価（上から順）
+作業種別 (会議・打合せ / 設計業務 など)
+  ↓ workitem_map[プロジェクト][作業種別]
+workItemId → TimeTrackerNX に POST</pre>
+
+<!-- ============================================================ -->
+<h2>⚙️ 設定ファイル (timetracker_config.json)</h2>
+
+<h3>project_rules — キーワード → プロジェクトコード</h3>
+<pre>{
+  "project_rules": [
+    { "pattern": "DCAP",                       "project": "JPQG1275" },
+    { "pattern": "FCM|TCM",                    "project": "JPQG1251" },
+    { "pattern": "SCM|側方|機能安全|ISP|PAVCT", "project": "JPQG1252" },
+    { "pattern": "PVM",                         "project": "JPQH0531" }
+  ],
+  "default_project": "JPRF0208"   ← どれにもマッチしない場合
+}</pre>
+<div class="tip">パターンは Python 正規表現。<code>|</code> で OR 指定。上から順に評価され、最初にマッチしたルールを使います。</div>
+
+<h3>worktype_rules — キーワード → 作業種別</h3>
+<pre>{
+  "worktype_rules": [
+    { "pattern": "レビュー|会議|定例|MTG|段コミ|打ち合わせ|打合せ|ヒアリング|相談|Weekly|DR",
+      "worktype": "会議・打合せ" },
+    { "pattern": "段取り|スケジュール|管理|TimeTracker|日報",
+      "worktype": "プロジェクト管理" }
+  ],
+  "default_worktype": "設計業務"   ← どれにもマッチしない場合
+}</pre>
+
+<h3>workitem_map — プロジェクト × 作業種別 → workItemId</h3>
+<table>
+  <tr><th>プロジェクト</th><th>会議・打合せ</th><th>プロジェクト管理</th><th>設計業務</th><th>試作・製品評価</th><th>その他</th></tr>
+  <tr><td>JPQG1275（DCAP）</td><td>73817</td><td>73818</td><td>73820</td><td>73821</td><td>73822</td></tr>
+  <tr><td>JPQG1251（FCM/TCM）</td><td>73799</td><td>73800</td><td>73802</td><td>73803</td><td>73804</td></tr>
+  <tr><td>JPQG1252（側方/機能安全）</td><td>73808</td><td>73809</td><td>73811</td><td>73812</td><td>73813</td></tr>
+  <tr><td>JPQH0531（PVM）</td><td>106617</td><td>106618</td><td>106620</td><td>106621</td><td>—</td></tr>
+  <tr><td>JPRF0208（デフォルト）</td><td>36752</td><td>—</td><td>→その他</td><td>—</td><td>36755</td></tr>
+</table>
+<div class="note">JPRF0208 に「設計業務」「プロジェクト管理」は存在しないため、<code>fallback_worktype: "その他"</code> (36755) が使われます。</div>
+
+<!-- ============================================================ -->
+<h2>✏️ ルールのカスタマイズ例</h2>
+
+<h3>「段コミ」を BEV-S3前方 (JPQG1251) に振りたい</h3>
+<p>段コミはBEV-S3前方の会議だが、現在はプロジェクトキーワードがないため JPRF0208 に分類される。<br>
+<code>project_rules</code> に追加するだけで修正できる：</p>
+<pre>"project_rules": [
+  { "pattern": "DCAP",                       "project": "JPQG1275" },
+  { "pattern": "FCM|TCM",                    "project": "JPQG1251" },
+  { "pattern": "SCM|側方|機能安全|ISP|PAVCT", "project": "JPQG1252" },
+  { "pattern": "PVM",                         "project": "JPQH0531" },
+  <strong>{ "pattern": "段コミ|課MTG",               "project": "JPQG1251" }</strong>  ← 追加
+]</pre>
+
+<h3>「OrinSim」を DCAP プロジェクトに振りたい</h3>
+<pre>{ "pattern": "OrinSim|確からしさ",           "project": "JPQG1275" }</pre>
+
+<h3>新しいプロジェクトを追加したい</h3>
+<ol>
+  <li><code>project_rules</code> にキーワードとプロジェクトコードを追加</li>
+  <li><code>workitem_map</code> に対応するプロジェクトコードと workItemId を追加</li>
+</ol>
+<pre>"workitem_map": {
+  "JPXX0000": {
+    "_project_name": "新プロジェクト名（メモ用）",
+    "会議・打合せ":     "XXXXX",
+    "プロジェクト管理": "XXXXX",
+    "設計業務":         "XXXXX"
+  }
+}</pre>
+
+<!-- ============================================================ -->
+<h2>📋 日報フォーマット（パース対象）</h2>
+<pre>＜業務計画＞
+06:30 ＜DCAP仕様書作業＞
+10:00 ＜【定例】段コミ＞
+11:00 ＜DCAP設計＞
+13:00 ＜昼休み＞
+14:00 ＜FCM機能確認＞
+＜業務実績＞</pre>
+<ul>
+  <li>時刻は <code>HH:MM</code> 形式で行頭に書く（00:00〜23:59）</li>
+  <li>活動内容は <code>＜　＞</code>（全角かっこ）で囲む</li>
+  <li><code>＜業務計画＞</code> と <code>＜業務実績＞</code> の間だけがパース対象</li>
+  <li>「昼休み」「移動」などの <code>skip_patterns</code> にマッチする活動は自動スキップ</li>
+</ul>
+
+<details>
+<summary>skip_patterns 一覧（クリックで展開）</summary>
+<pre>^$           （空行）
+^昼休み
+^業務終了
+業務開始
+移動
+午後休
+有休
+～昼休憩～</pre>
+<p><code>timetracker_config.json</code> の <code>skip_patterns</code> を編集して変更できます。</p>
+</details>
+
+<!-- ============================================================ -->
+<h2>🔧 トラブルシューティング</h2>
+<table>
+  <tr><th>エラー</th><th>原因</th><th>対処</th></tr>
+  <tr>
+    <td>環境変数 TT_API_KEY が未設定</td>
+    <td>APIキーがセットされていない</td>
+    <td><code>$env:TT_API_KEY = "your-key"</code> を実行</td>
+  </tr>
+  <tr>
+    <td>HTTP 400: TimeEntryOverlapped</td>
+    <td>同じ時間帯に既存の実績がある</td>
+    <td><code>tt_delete_date.py</code> で削除してから再登録</td>
+  </tr>
+  <tr>
+    <td>workItemId 未設定</td>
+    <td><code>workitem_map</code> に該当エントリがない</td>
+    <td>config の <code>workitem_map</code> を確認・追加</td>
+  </tr>
+  <tr>
+    <td>ModuleNotFoundError: requests</td>
+    <td>requestsライブラリ未インストール</td>
+    <td><code>.venv\Scripts\pip.exe install requests</code></td>
+  </tr>
+  <tr>
+    <td>＜業務計画＞セクションが見つかりません</td>
+    <td>日報の書式が違う</td>
+    <td>ファイルに <code>＜業務計画＞</code> と <code>＜業務実績＞</code> があるか確認</td>
+  </tr>
+</table>
+
+<hr>
+<p style="font-size:0.85em; color:#888;">
+  生成: 2026-06-23 &nbsp;|&nbsp;
+  設定ファイル: <span class="file">timetracker_config.json</span> &nbsp;|&nbsp;
+  スクリプト: <span class="file">timetracker_register.py</span>
+</p>
+
+</body>
+</html>

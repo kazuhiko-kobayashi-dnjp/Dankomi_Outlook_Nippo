@@ -1,0 +1,25 @@
+# ============================================================
+# ホワイトリスト方式 — TimeTracker関連ファイルのみ追跡
+# ============================================================
+
+# まずすべて無視
+*
+
+# このファイル自身
+!.gitignore
+
+# TimeTrackerNX 登録ツール本体
+!README.md
+!requirements.txt
+!timetracker_register.py
+!timetracker_config.json
+!tt.ps1
+!timetracker_manual.html
+
+# output/ サブフォルダの中の削除ユーティリティのみ
+!output/
+output/*
+!output/tt_delete_date.py
+
+# APIキーは絶対に追跡しない
+tt_apikey.txt

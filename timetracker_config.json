@@ -1,0 +1,92 @@
+{
+  "api": {
+    "base_url": "https://ttnx3.sys.globaldenso.com/TimeTrackerNX_05006",
+    "api_key_env": "TT_API_KEY",
+    "_note": "PowerShell: $env:TT_API_KEY = 'your-api-key'"
+  },
+
+  "diary_base_dir": "C:\\Users\\10001179776\\OneDrive - DENSO\\2017\\else\\memo\\日報",
+
+  "skip_patterns": [
+    "^$",
+    "^昼休み",
+    "^業務終了",
+    "業務開始",
+    "移動",
+    "午後休",
+    "～昼休憩～",
+    "^Canceled"
+  ],
+  "kyuka_patterns": ["やすみ", "休み", "有休"],
+  "_note_kyuka": "これにマッチするイベントは JPRF0208_有休 として登録。重複する他の予定はスキップ。",
+
+  "_note_project_rules": "上から順に評価し最初にマッチしたプロジェクトを使う。どれにもマッチしない場合は default_project",
+  "project_rules": [
+    { "pattern": "DCAP|一体型",                       "project": "JPQG1275" },
+    { "pattern": "FCM|TCM",                    "project": "JPQG1251" },
+    { "pattern": "SCM|側方|機能安全|ISP|PAVCT", "project": "JPQG1252" },
+    { "pattern": "PVM",                         "project": "JPQH0531" }
+  ],
+  "default_project": "JPRF0208",
+
+  "_note_worktype_rules": "上から順に評価し最初にマッチした作業種別を使う。どれにもマッチしない場合は default_worktype",
+  "worktype_rules": [
+    { "pattern": "レビュー|会議|定例|MTG|段コミ|打ち合わせ|打合せ|ヒアリング|相談|Weekly|DR", "worktype": "会議・打合せ" },
+    { "pattern": "試作|評価",                                                                 "worktype": "試作・製品評価" },
+    { "pattern": "資料|仕様書|報告書",                                                        "worktype": "資料作成" },
+    { "pattern": "段取り|スケジュール|管理|TimeTracker|日報",                                 "worktype": "プロジェクト管理" },
+    { "pattern": "設計",                                                                       "worktype": "設計業務" },
+    { "pattern": "フォーカス時間",                                                              "worktype": "先行調査・検討" }
+  ],
+  "default_worktype": "設計業務",
+
+  "_note_workitem_map": "workitem_map[project][worktype] = workItemId。worktype が存在しない場合は fallback_worktype を使う",
+  "workitem_map": {
+    "JPQG1275": {
+      "_project_name": "GSP4前方系_カメラ&ECU一体型(DCAP)",
+      "会議・打合せ":   "73817",
+      "プロジェクト管理": "73818",
+      "資料作成":       "73819",
+      "設計業務":       "73820",
+      "試作・製品評価": "73821",
+      "その他":         "73822"
+    },
+    "JPQG1251": {
+      "_project_name": "BEV-S3_前方カメラ(FCM/TCM)",
+      "会議・打合せ":   "73799",
+      "プロジェクト管理": "73800",
+      "資料作成":       "73801",
+      "設計業務":       "73802",
+      "試作・製品評価": "73803",
+      "その他":         "73804"
+    },
+    "JPQG1252": {
+      "_project_name": "BEV-S3_側方カメラ(SCM/側方/機能安全/ISP/PAVCT)",
+      "会議・打合せ":   "73808",
+      "プロジェクト管理": "73809",
+      "資料作成":       "73810",
+      "設計業務":       "73811",
+      "試作・製品評価": "73812",
+      "その他":         "73813"
+    },
+    "JPQH0531": {
+      "_project_name": "BEV-S3_PVMカメラ",
+      "会議・打合せ":   "106617",
+      "プロジェクト管理": "106618",
+      "資料作成":       "106619",
+      "設計業務":       "106620",
+      "試作・製品評価": "106621"
+    },
+    "JPRF0208": {
+      "_project_name": "製品共通_画像センサ(デフォルト)",
+      "会議・打合せ":   "36752",
+      "先行調査・検討": "36751",
+      "教育":           "36753",
+      "有休":           "36754",
+      "その他":         "36755",
+      "_note": "JPRF0208に設計業務・プロジェクト管理は存在しないため fallback_worktype=その他 が使われる"
+    }
+  },
+  "fallback_worktype": "その他"
+}
+
