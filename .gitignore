@@ -16,6 +16,10 @@
 !tt.ps1
 !timetracker_manual.html
 
+# 進捗管理 Excel → Outlook スケジューラ
+!schedule_tasks.py
+!st.ps1
+
 # output/ サブフォルダの中の削除ユーティリティのみ
 !output/
 output/*
