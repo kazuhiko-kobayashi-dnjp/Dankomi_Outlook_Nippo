@@ -23,8 +23,10 @@
 param(
     [string]$Date  = (Get-Date -Format "yyMMdd"),
     [switch]$Dry,
-    [switch]$Diary   # 日報ソースを使う場合のみ指定。省略時はOutlook
+    [switch]$Diary,  # 日報ソースを使う場合のみ指定。省略時はOutlook
+    [switch]$Help
 )
+if ($Help) { Get-Help $MyInvocation.MyCommand.Path; exit 0 }
 
 $ScriptDir = $PSScriptRoot
 $KeyFile   = Join-Path $ScriptDir "tt_apikey.txt"

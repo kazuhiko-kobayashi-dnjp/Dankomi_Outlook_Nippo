@@ -1,0 +1,20 @@
+{
+    "python-envs.defaultEnvManager": "ms-python.python:venv",
+    "terminal.integrated.profiles.windows": {
+        "日報作成": {
+            "path": "powershell.exe",
+            "args": ["-NoExit", "-Command", "python tools/nippo/outlook_auto_nippo.py $((Get-Date).ToString('yyMMdd'))"],
+            "icon": "notebook"
+        }
+    },
+    "search.exclude": {
+        "backups_shiftjis_all/**": true,
+        "backups_shiftjis_nippo/**": true,
+        ".venv/**": true,
+        "__pycache__/**": true,
+        "_external/**": true,
+        "attendance_profile/**": true,
+        "output/**": true,
+        "reusable_gantt_library/**": true
+    }
+}

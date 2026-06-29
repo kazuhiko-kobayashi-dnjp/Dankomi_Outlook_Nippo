@@ -207,6 +207,8 @@ def build_entries_outlook(events: list, config: dict) -> list:
             for k in kyuka_blocks
         )
 
+    min_dur_h = config.get('min_duration_minutes', 0) / 60.0
+
     result = []
     for blk in sorted(events, key=lambda x: x['start']):
         subjects = blk['subjects']
@@ -215,6 +217,8 @@ def build_entries_outlook(events: list, config: dict) -> list:
         dur_h = (end - start).total_seconds() / 3600.0
         if dur_h <= 0:
             continue
+        if min_dur_h > 0 and dur_h < min_dur_h:
+            continue  # 最小時間未満はスキップ
 
         if is_kyuka(subjects):
             # 有休イベント → JPRF0208_有休 として登録
@@ -364,6 +368,15 @@ def make_headers(config: dict) -> dict:
     api_cfg     = config.get('api', {})
     env_name    = api_cfg.get('api_key_env', 'TT_API_KEY')
     api_key     = os.environ.get(env_name, '')
+
+    # 環境変数未設定の場合は tt_apikey.txt から直接読み込む
+    if not api_key:
+        key_file = Path(__file__).parent / 'tt_apikey.txt'
+        if key_file.exists():
+            first_line = key_file.read_text(encoding='utf-8').splitlines()
+            if first_line:
+                api_key = first_line[0].strip()
+
     if not api_key:
         print(f'[ERROR] 環境変数 {env_name} が未設定です。')
         print(f'        TimeTracker の「ユーザー設定 → APIキーを生成」で取得し、')

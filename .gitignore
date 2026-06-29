@@ -20,6 +20,20 @@
 !schedule_tasks.py
 !st.ps1
 
+# 日報自動生成
+!tools/
+tools/*
+!tools/nippo/
+tools/nippo/*
+!tools/nippo/outlook_auto_nippo.py
+!tools/nippo/outlook_auto_nippo_tz.py
+!tools/nippo/convert_nippo_to_utf8.py
+
+# VS Code ターミナルプロファイル定義
+!.vscode/
+.vscode/*
+!.vscode/settings.json
+
 # output/ サブフォルダの中の削除ユーティリティのみ
 !output/
 output/*

@@ -17,8 +17,11 @@
     "～昼休憩～",
     "^Canceled"
   ],
-  "kyuka_patterns": ["やすみ", "休み", "有休"],
+  "kyuka_patterns": ["やすみ", "休み", "有休", "年休"],
   "_note_kyuka": "これにマッチするイベントは JPRF0208_有休 として登録。重複する他の予定はスキップ。",
+
+  "min_duration_minutes": 15,
+  "_note_min_duration": "この分数未満の予定はスキップ（TimeTrackerNX の15分粒度制約対応）",
 
   "_note_project_rules": "上から順に評価し最初にマッチしたプロジェクトを使う。どれにもマッチしない場合は default_project",
   "project_rules": [
