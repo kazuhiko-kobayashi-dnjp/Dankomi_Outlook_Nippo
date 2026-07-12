@@ -1,2 +1,6 @@
 requests>=2.28.0
 pywin32>=306
+
+# Teams チャット週報自動生成ツール (wr.ps1 / tools/teams_weekly_report.py)
+msal>=1.28.0
+openpyxl>=3.1.0

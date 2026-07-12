@@ -1,5 +1,5 @@
 # ============================================================
-# ホワイトリスト方式 — TimeTracker関連ファイルのみ追跡
+# ホワイトリスト方式 — TimeTracker関連ファイル + Teams週報自動生成ツールのみ追跡
 # ============================================================
 
 # まずすべて無視
@@ -28,6 +28,13 @@ tools/nippo/*
 !tools/nippo/outlook_auto_nippo.py
 !tools/nippo/outlook_auto_nippo_tz.py
 !tools/nippo/convert_nippo_to_utf8.py
+
+# Teams チャット週報自動生成ツール(個人情報なしで第三者配布可能。
+# tools/.user_config.json / tools/.gh_models_token / tools/.msal_token_cache.json / tools/.teams_allow は
+# 上記 tools/* により引き続きgit管理対象外（個人設定・認証情報なので意図的）)
+!wr.ps1
+!tools/teams_weekly_report.py
+!tools/.user_config.example.json
 
 # VS Code ターミナルプロファイル定義
 !.vscode/
