@@ -31,7 +31,13 @@ except Exception as _e:
 BASE_DIR = Path(__file__).parent
 DATA_FILE = BASE_DIR / "data" / "tasks.json"
 BACKUP_DIR = BASE_DIR / "data" / "backups"
-BACKUP_KEEP = 60          # 直近この件数のみ保持(古いものから自動削除)
+# 1世代あたりのファイルサイズはtasks.json全体(現状 約700KB)なので、500世代でも
+# 約350MBほどにしかならず、ローカルディスク容量としては問題にならない。
+# 一方、保存のたびに毎回バックアップされるわけではなく、下のBACKUP_MIN_INTERVAL_SECにより
+# 「前回のバックアップから5分未満なら新規作成しない」よう間引かれるため、
+# 複数人が短時間に連続保存しても消費される世代数は「保存回数」ではなく
+# 「実際に5分以上間隔が空いた回数」で決まる。
+BACKUP_KEEP = 500          # 直近この件数のみ保持(古いものから自動削除)
 BACKUP_MIN_INTERVAL_SEC = 300  # 前回バックアップからこの秒数未満ならスキップ(連続保存で乗立しないように)
 EXCEL_SOURCE_CONFIG = BASE_DIR / "data" / "excel_source_path.txt"
 PUBLIC_DIR = BASE_DIR / "public"
