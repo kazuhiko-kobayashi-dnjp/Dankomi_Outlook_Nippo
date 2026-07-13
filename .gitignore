@@ -41,6 +41,22 @@ tools/nippo/*
 .vscode/*
 !.vscode/settings.json
 
+# 露出制御業務進捗管理 (Webアプリ) — アプリコードのみ追跡。
+# app/data/ (業務データ本体・ローカルバックアップ・元Excelパス設定) と
+# app/.msal_token_cache.json (SharePoint認証キャッシュ) は個人情報/認証情報のため対象外。
+!manage_exp_progress/
+manage_exp_progress/*
+!manage_exp_progress/README.md
+!manage_exp_progress/app/
+manage_exp_progress/app/*
+!manage_exp_progress/app/server.py
+!manage_exp_progress/app/import_excel.py
+!manage_exp_progress/app/export_excel.py
+!manage_exp_progress/app/richtext_bridge.py
+!manage_exp_progress/app/sharepoint_backup.py
+!manage_exp_progress/app/public/
+!manage_exp_progress/app/public/**
+
 # output/ サブフォルダの中の削除ユーティリティのみ
 !output/
 output/*

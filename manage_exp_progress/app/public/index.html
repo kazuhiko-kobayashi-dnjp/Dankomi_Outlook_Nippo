@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>露出制御業務進捗管理</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<style>
+  :root {
+    color-scheme: light;
+    --navy: #1a237e;
+    --navy2: #283593;
+    --bg: #f4f5fa;
+    --border: #d8dae6;
+    --danger: #e53935;
+    --warn: #fb8c00;
+    --soon: #fdd835;
+    --ok: #43a047;
+    --gray: #9e9e9e;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: "Meiryo","メイリオ","Yu Gothic","Segoe UI",sans-serif; background: var(--bg); color:#222; }
+  header { background: var(--navy); color:#fff; padding: 10px 18px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;}
+  header h1 { font-size: 16px; margin:0; }
+  header .actions button { background:var(--navy2); color:#fff; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:12px; margin-left:6px;}
+  header .actions button:hover { background:#3949ab; }
+
+  .summary { display:flex; gap:10px; flex-wrap:wrap; padding: 10px 18px; background:#fff; border-bottom:1px solid var(--border); }
+  .summary .card { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px 14px; font-size:12px; min-width:90px; text-align:center;}
+  .summary .card .num { font-size:20px; font-weight:bold; color:var(--navy); display:block;}
+
+  .filter-bar { display:flex; flex-wrap:wrap; gap:8px; padding: 10px 18px; background:#fff; border-bottom:1px solid var(--border); align-items:center; position:sticky; top:0; z-index:5;}
+  .filter-bar select, .filter-bar input[type=text] { padding:5px 8px; border:1px solid var(--border); border-radius:4px; font-size:12px; }
+  .filter-bar .status-toggles button { border:1px solid var(--border); background:#fff; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px; margin-right:4px;}
+  .filter-bar .status-toggles button.active { background:var(--navy); color:#fff; border-color:var(--navy);}
+  .filter-bar .count { font-size:12px; color:#555; margin-left:auto; }
+  .filter-bar button.reset { background:#eee; border:1px solid var(--border); border-radius:4px; padding:5px 10px; cursor:pointer; font-size:12px;}
+
+  table { width:100%; border-collapse: collapse; background:#fff; font-size:12px; }
+  thead th { position:sticky; top:88px; background: var(--navy2); color:#fff; padding:6px 8px; text-align:left; white-space:nowrap; z-index:4;}
+  tbody td { padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
+  tbody tr { cursor:pointer; }
+  tbody tr:hover { background:#eef1fb; }
+  .preview3 { width:320px; max-width:320px; overflow:hidden; line-height:1.45; }
+  .preview3 .pline { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; color:#fff; white-space:nowrap;}
+  .deadline-overdue { background:var(--danger); color:#fff; }
+  .deadline-2 { background:var(--warn); color:#fff; }
+  .deadline-7 { background:var(--soon); color:#333; }
+  .deadline-ok { background:var(--ok); color:#fff; }
+  .deadline-none { background:#eee; color:#888; }
+  .person-chip { padding:2px 6px; border-radius:4px; font-size:11px; }
+
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); align-items:flex-start; justify-content:center; padding:20px 12px; overflow:auto; z-index:20;}
+  .modal-overlay.show { display:flex; }
+
+  .lightbox-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.8); align-items:center; justify-content:center; z-index:50; cursor:zoom-out; padding:20px; }
+  .lightbox-overlay.show { display:flex; }
+  .lightbox-overlay img { max-width:92vw; max-height:92vh; border-radius:6px; box-shadow:0 8px 30px rgba(0,0,0,.6); }
+  .rte img { cursor:zoom-in; }
+  .modal { background:#fff; border-radius:8px; width:1100px; max-width:96vw; min-width:480px; padding:20px 24px; resize:horizontal; overflow:auto; }
+  .modal h2 { margin-top:0; font-size:18px; color:var(--navy); }
+  .modal-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .modal-head h2 { margin:0; }
+  .nav-btns { display:flex; gap:8px; }
+  .btn-nav { background:var(--bg); border:1px solid var(--border); color:var(--navy); padding:6px 14px; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; }
+  .btn-nav:hover { background:#e8eaf6; }
+  .btn-nav:disabled { opacity:.4; cursor:not-allowed; }
+  .modal label { display:block; font-size:12px; color:#555; margin-top:8px; margin-bottom:3px; font-weight:bold;}
+  .modal input[type=text], .modal input[type=date], .modal input[type=number], .modal select, .modal textarea {
+    width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:4px; font-size:13px; font-family:inherit;
+  }
+  .modal textarea { resize:vertical; overflow:hidden; }
+  .rte-toolbar { display:flex; gap:4px; margin:4px 0; flex-wrap:wrap; }
+  .rte-toolbar button { border:1px solid var(--border); background:#fff; border-radius:4px; padding:3px 9px; cursor:pointer; font-size:12px; font-weight:bold; min-width:26px; }
+  .rte-toolbar button:hover { background:#eef1fb; }
+  .rte {
+    width:100%; padding:8px 10px; border:2px solid var(--border); border-radius:4px;
+    font-size:13px; font-family:inherit; overflow:auto; white-space:pre-wrap;
+    overflow-wrap:anywhere; word-break:break-word; min-width:0; box-sizing:border-box;
+    background:#fff;
+  }
+  .rte:focus { outline:none; border-color:var(--navy2); }
+  .rte img { max-width:100%; height:auto; display:block; margin:6px 0; border-radius:4px; border:1px solid var(--border); }
+  .modal .headfields { display:grid; grid-template-columns:repeat(6, 1fr); gap:10px; align-items:end; }
+  .modal .row2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .modal .plan-recent { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:14px; }
+  .modal .plan-recent .col { min-width:0; }
+  .modal .plan-recent .col label { font-size:14px; color:var(--navy); }
+  .modal .plan-recent .rte { min-height:220px; font-size:14px; line-height:1.6; background:#fafbff; border-width:2px; }
+  .modal .sub2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
+  .modal .btns { margin-top:16px; display:flex; gap:8px; justify-content:flex-end; }
+  .modal .btns button { padding:8px 16px; border-radius:4px; border:none; cursor:pointer; font-size:13px;}
+  .btn-save { background:var(--navy); color:#fff; }
+  .btn-delete { background:var(--danger); color:#fff; }
+  .btn-cancel { background:#eee; }
+
+  .view-hidden { display:none !important; }
+  .gantt-wrap { padding: 10px 18px; overflow-x:auto; }
+  .gantt-header, .gantt-row { display:grid; gap:4px; align-items:stretch; }
+  .gantt-hcell { background:var(--navy2); color:#fff; font-size:11px; padding:6px 4px; text-align:center; border-radius:4px; position:sticky; top:88px; z-index:3; }
+  .gantt-rowlabel { text-align:left; padding-left:8px; }
+  .gantt-header .gantt-rowlabel { background:var(--navy); }
+  .gantt-row { border-bottom:1px solid var(--border); padding:4px 0; }
+  .gantt-cell { min-height:32px; padding:3px; font-size:11px; background:#fbfbfd; border:1px solid #f0f0f0; border-radius:3px; display:flex; flex-direction:column; gap:2px; }
+  .gantt-cell.gantt-rowlabel { background:#fff; border:none; justify-content:flex-start; padding-top:6px; font-size:12px; font-weight:bold; color:var(--navy); position:sticky; left:0; z-index:2; }
+  .gantt-count { color:#777; font-weight:normal; font-size:10px; }
+  .gantt-chip { padding:2px 5px; border-radius:3px; font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; border-left:3px solid #999; background:#f5f5f5; color:#333; }
+  .gantt-chip.deadline-overdue { border-left-color:var(--danger); background:#ffebee; color:#b71c1c; }
+  .gantt-chip.deadline-2 { border-left-color:var(--warn); background:#fff3e0; color:#e65100; }
+  .gantt-chip.deadline-7 { border-left-color:var(--soon); background:#fffde7; color:#5c4c00; }
+  .gantt-chip.deadline-ok { border-left-color:var(--ok); background:#e8f5e9; color:#1b5e20; }
+  .gantt-chip.deadline-none { border-left-color:#ccc; background:#fafafa; color:#666; }
+  .gantt-chip:hover { filter:brightness(0.95); }
+  .gantt-more { padding:2px 5px; font-size:10px; color:var(--navy2); cursor:pointer; text-decoration:underline; }
+  .gantt-extra { display:flex; flex-direction:column; gap:2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📋 露出制御業務進捗及び報告 - Web管理</h1>
+  <div class="actions">
+    <button id="btnNew">＋ 新規タスク</button>
+    <button id="btnToggleView">🗓 ロードマップ表示</button>
+    <button id="btnBackups">🕒 バージョン履歴</button>
+    <button id="btnRefreshExcel">🔄 Excelから再取込</button>
+    <button id="btnExport">📥 Excelエクスポート</button>
+  </div>
+</header>
+
+<div class="summary" id="summary"></div>
+
+<div class="filter-bar">
+  <select id="fProject"><option value="">全プロジェクト</option></select>
+  <select id="fPerson"><option value="">全担当者</option></select>
+  <div class="status-toggles" id="fStatus"></div>
+  <select id="fGanttGroupBy" class="view-hidden" title="ロードマップの行グループ">
+    <option value="person">担当者でグループ</option>
+    <option value="project">プロジェクトでグループ</option>
+    <option value="category">機能でグループ</option>
+  </select>
+  <select id="fGanttMonths" class="view-hidden" title="ロードマップの表示期間">
+    <option value="3" selected>3ヶ月表示</option>
+    <option value="6">6ヶ月表示</option>
+    <option value="12">12ヶ月表示</option>
+  </select>
+  <input type="text" id="fText" placeholder="キーワード検索(段取り/直近の動き/コメント)" style="width:260px;">
+  <button class="reset" id="btnReset">条件クリア</button>
+  <span class="count" id="countLabel"></span>
+</div>
+
+<div id="viewTable">
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>プロジェクト</th>
+      <th>機能</th>
+      <th>担当者</th>
+      <th>業務の段取り</th>
+      <th>直近の動き</th>
+      <th>期限</th>
+      <th>状況</th>
+      <th>工数</th>
+    </tr>
+  </thead>
+  <tbody id="tbody"></tbody>
+</table>
+</div>
+
+<div id="viewGantt" class="view-hidden">
+  <div class="gantt-wrap">
+    <div id="ganttGrid"></div>
+  </div>
+</div>
+
+<div class="lightbox-overlay" id="lightboxOverlay">
+  <img id="lightboxImg" src="" alt="">
+</div>
+
+<div class="modal-overlay" id="backupOverlay">
+  <div class="modal" style="width:720px;">
+    <div class="modal-head">
+      <h2 id="backupModalTitle">🕒 バージョン履歴</h2>
+    </div>
+    <p id="backupModalDesc" style="font-size:12px;color:#666;">保存のたびに自動作成されるスナップショット一覧。各バージョンの「差分を見る」で現在との違いを確認してから復元できます。</p>
+    <div id="backupList" style="max-height:60vh;overflow:auto;"></div>
+    <div id="backupDiffView" style="max-height:60vh;overflow:auto;display:none;"></div>
+    <div class="btns">
+      <button class="btn-cancel" id="btnBackupBack" style="display:none;">← 一覧に戻る</button>
+      <button class="btn-cancel" id="btnBackupClose">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="modalTitle">タスク詳細</h2>
+      <div class="nav-btns">
+        <button class="btn-nav" id="btnPrev" title="前の案件 (↑キー)">↑ 前の案件</button>
+        <button class="btn-nav" id="btnNext" title="次の案件 (↓キー)">↓ 次の案件</button>
+      </div>
+    </div>
+    <div class="headfields">
+      <div>
+        <label>管理番号</label>
+        <input type="text" id="fld_id">
+      </div>
+      <div>
+        <label>製品・プロジェクト</label>
+        <input type="text" id="fld_project" list="dl_project">
+      </div>
+      <div>
+        <label>機能</label>
+        <input type="text" id="fld_category" list="dl_category">
+      </div>
+      <div>
+        <label>担当者</label>
+        <input type="text" id="fld_person" list="dl_person">
+      </div>
+      <div>
+        <label>期限</label>
+        <input type="date" id="fld_deadline">
+      </div>
+      <div>
+        <label>状況</label>
+        <select id="fld_status_mark">
+          <option value="">(未設定)</option>
+          <option value="◎">◎ 重要</option>
+          <option value="○">○ 報告あり</option>
+          <option value="●">● 順調</option>
+          <option value="▲">▲ 遅延しそう</option>
+          <option value="済">済 完了</option>
+          <option value="完">完 完了</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="plan-recent">
+      <div class="col">
+        <label>業務の段取り</label>
+        <div class="rte-toolbar" data-target="fld_plan">
+          <button type="button" data-cmd="bold" title="太字"><b>B</b></button>
+          <button type="button" data-cmd="underline" title="下線"><u>U</u></button>
+          <button type="button" data-color="#e53935" style="color:#e53935" title="赤字">A</button>
+          <button type="button" data-color="#1e88e5" style="color:#1e88e5" title="青字">A</button>
+          <button type="button" data-color="#43a047" style="color:#43a047" title="緑字">A</button>
+          <button type="button" data-color="#fb8c00" style="color:#fb8c00" title="オレンジ字">A</button>
+          <button type="button" data-color="#000000" title="黒字(標準)">A</button>
+          <button type="button" data-cmd="removeFormat" title="書式クリア">✕書式</button>
+          <button type="button" data-img="1" title="画像を挿入(クリップボード貼り付けも可)">🖼️画像</button>
+        </div>
+        <div class="rte" id="fld_plan" contenteditable="true"></div>
+      </div>
+      <div class="col">
+        <label>直近の動き（進捗）</label>
+        <div class="rte-toolbar" data-target="fld_recent">
+          <button type="button" data-cmd="bold" title="太字"><b>B</b></button>
+          <button type="button" data-cmd="underline" title="下線"><u>U</u></button>
+          <button type="button" data-color="#e53935" style="color:#e53935" title="赤字">A</button>
+          <button type="button" data-color="#1e88e5" style="color:#1e88e5" title="青字">A</button>
+          <button type="button" data-color="#43a047" style="color:#43a047" title="緑字">A</button>
+          <button type="button" data-color="#fb8c00" style="color:#fb8c00" title="オレンジ字">A</button>
+          <button type="button" data-color="#000000" title="黒字(標準)">A</button>
+          <button type="button" data-cmd="removeFormat" title="書式クリア">✕書式</button>
+          <button type="button" data-img="1" title="画像を挿入(クリップボード貼り付けも可)">🖼️画像</button>
+        </div>
+        <div class="rte" id="fld_recent" contenteditable="true"></div>
+      </div>
+    </div>
+
+    <div class="sub2">
+      <div>
+        <label>工数</label>
+        <input type="number" step="0.5" id="fld_manhours">
+      </div>
+      <div>
+        <label>追記メモ</label>
+        <textarea id="fld_note2" style="min-height:60px;"></textarea>
+      </div>
+    </div>
+    <label>コメント</label>
+    <div class="rte-toolbar" data-target="fld_comment">
+      <button type="button" data-cmd="bold" title="太字"><b>B</b></button>
+      <button type="button" data-cmd="underline" title="下線"><u>U</u></button>
+      <button type="button" data-color="#e53935" style="color:#e53935" title="赤字">A</button>
+      <button type="button" data-color="#1e88e5" style="color:#1e88e5" title="青字">A</button>
+      <button type="button" data-color="#43a047" style="color:#43a047" title="緑字">A</button>
+      <button type="button" data-color="#fb8c00" style="color:#fb8c00" title="オレンジ字">A</button>
+      <button type="button" data-color="#000000" title="黒字(標準)">A</button>
+      <button type="button" data-cmd="removeFormat" title="書式クリア">✕書式</button>
+      <button type="button" data-img="1" title="画像を挿入(クリップボード貼り付けも可)">🖼️画像</button>
+    </div>
+    <div class="rte" id="fld_comment" contenteditable="true" style="min-height:60px;"></div>
+    <div class="btns">
+      <button class="btn-delete" id="btnDelete">削除</button>
+      <button class="btn-cancel" id="btnClone">📋 複製して新規作成</button>
+      <button class="btn-cancel" id="btnCancel">キャンセル</button>
+      <button class="btn-save" id="btnSave">保存</button>
+    </div>
+  </div>
+</div>
+<datalist id="dl_project"></datalist>
+<datalist id="dl_category"></datalist>
+<datalist id="dl_person"></datalist>
+
+<script>
+let DATA = { tasks: [], meta: {} };
+let currentRow = null;
+let currentUpdatedAt = null;
+let statusFilter = new Set();
+
+// リッチテキスト(装飾)欄用ヘルパー: HTML文字列 <-> プレーンテキスト の相互変換
+function escapeHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// 既存データ(改行のみのプレーンテキスト)や保存済みリッチHTMLの両方を、
+// contenteditable欄にセットしても安全なHTML文字列に変換する
+function textToEditableHtml(text) {
+  if (!text) return '';
+  // 既にHTMLタグを含む場合(リッチ編集済み)はそのまま使う
+  if (/<[a-z][\s\S]*>/i.test(text)) return text;
+  return escapeHtml(text).replace(/\n/g, '<br>');
+}
+
+// contenteditableのHTML内容を、一覧プレビュー/検索/Excel用のプレーンテキストに変換する
+function htmlToPlainText(html) {
+  if (!html) return '';
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  tmp.querySelectorAll('br').forEach(el => el.replaceWith('\n'));
+  tmp.querySelectorAll('div,p').forEach(el => el.insertAdjacentText('afterend', '\n'));
+  return (tmp.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+const PERSON_COLORS = ['#e3f2fd','#f3e5f5','#e8f5e9','#fff3e0','#fce4ec','#e0f2f1','#f1f8e9','#ede7f6','#fbe9e7','#e1f5fe','#f9fbe7','#efebe9'];
+function personColor(name) {
+  if (!name) return '#eee';
+  let h = 0;
+  for (let i=0;i<name.length;i++) h = (h*31 + name.charCodeAt(i)) % PERSON_COLORS.length;
+  return PERSON_COLORS[h];
+}
+
+// 元Excel(条件付き書式)で担当者別に設定されていた行色をそのまま踏襲(dxfId 53-64の実際の色を抽出してマッピング)。
+// この12名以外の担当者は元Excelでも行色付け対象外だったため、デフォルト(無色)のままとする。
+const PERSON_ROW_COLORS = {
+  '土田': '#FBCCFF',
+  '村尾': '#E7E200',
+  '中村': '#FFC165',
+  '西川': '#E3EFD9',
+  '小林': '#CDCCFF',
+  '越坂': '#D0EEFF',
+  '片山': '#DAE1F3',
+  '杉本': '#FEFFCA',
+  '小島': '#DFEBF8',
+  '阪本': '#D1FFCA',
+  '大谷': '#00D1CC',
+  '石地': '#65DCD9',
+};
+function personRowColor(name) {
+  if (!name) return '';
+  if (PERSON_ROW_COLORS[name]) return PERSON_ROW_COLORS[name];
+  for (const key in PERSON_ROW_COLORS) {
+    if (name.includes(key)) return PERSON_ROW_COLORS[key];
+  }
+  return '';
+}
+
+function deadlineInfo(dateStr) {
+  if (!dateStr) return { cls: 'deadline-none', label: '未設定' };
+  const today = new Date(); today.setHours(0,0,0,0);
+  const d = new Date(dateStr); d.setHours(0,0,0,0);
+  const diffDays = Math.round((d - today) / 86400000);
+  if (diffDays < 0) return { cls: 'deadline-overdue', label: `${dateStr} (超過${-diffDays}日)` };
+  if (diffDays <= 2) return { cls: 'deadline-2', label: `${dateStr} (残${diffDays}日)` };
+  if (diffDays <= 7) return { cls: 'deadline-7', label: `${dateStr} (残${diffDays}日)` };
+  return { cls: 'deadline-ok', label: dateStr };
+}
+
+async function loadData() {
+  const res = await fetch('/api/tasks');
+  DATA = await res.json();
+  populateFilters();
+  render();
+}
+
+function populateFilters() {
+  const fProject = document.getElementById('fProject');
+  const fPerson = document.getElementById('fPerson');
+  const fStatus = document.getElementById('fStatus');
+  const dlProject = document.getElementById('dl_project');
+  const dlCategory = document.getElementById('dl_category');
+  const dlPerson = document.getElementById('dl_person');
+
+  // 保存/削除/再取込のたびにloadData()→populateFilters()が呼ばれ選択肢を作り直すため、
+  // 何もしないと絞り込み条件(プロジェクト/担当者/ステータス)が毎回リセットされてしまう。
+  // 再描画前に現在の選択値を退避し、再描画後に復元する。
+  const prevProject = fProject.value;
+  const prevPerson = fPerson.value;
+
+  fProject.innerHTML = '<option value="">全プロジェクト</option>' +
+    (DATA.meta.projects||[]).map(p => `<option value="${p}">${p}</option>`).join('');
+  fPerson.innerHTML = '<option value="">全担当者</option>' +
+    (DATA.meta.persons||[]).map(p => `<option value="${p}">${p}</option>`).join('');
+  dlProject.innerHTML = (DATA.meta.projects||[]).map(p => `<option value="${p}">`).join('');
+  dlCategory.innerHTML = (DATA.meta.categories||[]).map(p => `<option value="${p}">`).join('');
+  dlPerson.innerHTML = (DATA.meta.persons||[]).map(p => `<option value="${p}">`).join('');
+
+  // 選択していたプロジェクト/担当者が引き続き選択肢に存在する場合のみ復元する
+  if (prevProject && (DATA.meta.projects||[]).includes(prevProject)) fProject.value = prevProject;
+  if (prevPerson && (DATA.meta.persons||[]).includes(prevPerson)) fPerson.value = prevPerson;
+
+  const statuses = ['◎','○','●','▲','済','完','未設定'];
+  fStatus.innerHTML = statuses.map(s =>
+    `<button data-s="${s}" class="${statusFilter.has(s) ? 'active' : ''}">${s}</button>`
+  ).join('');
+  fStatus.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const s = btn.dataset.s;
+      if (statusFilter.has(s)) { statusFilter.delete(s); btn.classList.remove('active'); }
+      else { statusFilter.add(s); btn.classList.add('active'); }
+      render();
+    });
+  });
+}
+
+function getFiltered() {
+  const project = document.getElementById('fProject').value;
+  const person = document.getElementById('fPerson').value;
+  const text = document.getElementById('fText').value.trim().toLowerCase();
+
+  const list = DATA.tasks.filter(t => {
+    if (project && t.project !== project) return false;
+    if (person && t.person !== person) return false;
+    if (statusFilter.size > 0) {
+      const mark = t.status_mark || '未設定';
+      if (!statusFilter.has(mark)) return false;
+    }
+    if (text) {
+      const hay = `${htmlToPlainText(t.plan)} ${htmlToPlainText(t.recent)} ${htmlToPlainText(t.comment)} ${t.note2} ${t.category} ${t.id}`.toLowerCase();
+      if (!hay.includes(text)) return false;
+    }
+    return true;
+  });
+
+  list.sort((a, b) => {
+    const na = parseFloat(a.id), nb = parseFloat(b.id);
+    const va = isNaN(na) ? Infinity : na;
+    const vb = isNaN(nb) ? Infinity : nb;
+    if (va !== vb) return va - vb;
+    return String(a.id).localeCompare(String(b.id));
+  });
+  return list;
+}
+
+function render() {
+  const list = getFiltered();
+  if (currentView === 'gantt') {
+    renderGantt(list);
+  } else {
+    renderTable(list);
+  }
+  document.getElementById('countLabel').textContent = `表示中 ${list.length} / 全 ${DATA.tasks.length} 件`;
+  renderSummary(list);
+}
+
+function renderTable(list) {
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = list.map(t => {
+    const dl = deadlineInfo(t.deadline);
+    const rowColor = personRowColor(t.person);
+    const rowStyle = rowColor ? ` style="background:${rowColor}"` : '';
+    return `<tr data-row="${t.row}"${rowStyle}>
+      <td>${t.id}</td>
+      <td>${t.project||''}</td>
+      <td>${t.category||''}</td>
+      <td><span class="person-chip" style="background:${personColor(t.person)}">${t.person||''}</span></td>
+      <td class="preview3" title="${escapeHtml(htmlToPlainText(t.plan))}">${preview3Html(htmlToPlainText(t.plan))}</td>
+      <td class="preview3" title="${escapeHtml(htmlToPlainText(t.recent))}">${preview3Html(htmlToPlainText(t.recent))}</td>
+      <td><span class="badge ${dl.cls}">${dl.label}</span></td>
+      <td>${t.status_mark||''} ${t.status||''}</td>
+      <td>${t.manhours ?? ''}</td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('tr').forEach(tr => {
+    tr.addEventListener('click', () => openModal(Number(tr.dataset.row)));
+  });
+}
+
+/* ===== ガントチャート風ロードマップ表示 =====
+   個別タスクにはstart日が無いため、期限(deadline)を基準に
+   「期限超過 / 今月〜+Nヶ月 / それ以降 / 未設定」の月次バケツに分けて
+   担当者(または プロジェクト/機能)ごとの行にタスクをチップ表示する。
+   中長期タスクの採団スパン(直3ヶ月程度)に合わせて表示期間を可変にできるようにしている(デフォルト3ヶ月)。 */
+let currentView = 'table';
+let GANTT_MONTHS = 3;
+
+function bucketOf(deadline) {
+  if (!deadline) return 'none';
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = new Date(deadline); d.setHours(0, 0, 0, 0);
+  if (isNaN(d.getTime())) return 'none';
+  if (d < today) return 'overdue';
+  const cur = new Date(today.getFullYear(), today.getMonth(), 1);
+  const monthDiff = (d.getFullYear() - cur.getFullYear()) * 12 + (d.getMonth() - cur.getMonth());
+  if (monthDiff < GANTT_MONTHS) return `m${monthDiff}`;
+  return 'far';
+}
+
+function ganttColumns() {
+  const today = new Date();
+  const cols = [{ key: 'overdue', label: '期限超過' }];
+  for (let i = 0; i < GANTT_MONTHS; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    cols.push({ key: `m${i}`, label: `${d.getFullYear()}/${d.getMonth() + 1}` });
+  }
+  cols.push({ key: 'far', label: `${GANTT_MONTHS}ヶ月超で先` });
+  cols.push({ key: 'none', label: '期限未設定' });
+  return cols;
+}
+
+function renderGantt(list) {
+  const groupField = document.getElementById('fGanttGroupBy').value || 'person';
+  const cols = ganttColumns();
+  const groups = new Map();
+  list.forEach(t => {
+    const key = t[groupField] || '(未設定)';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(t);
+  });
+  const groupNames = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b, 'ja'));
+  const gridCols = `140px repeat(${cols.length}, minmax(90px, 1fr))`;
+  const CHIP_LIMIT = 6;
+
+  function chipHtml(t) {
+    const dl = deadlineInfo(t.deadline);
+    const label = `${t.status_mark || ''}${t.id} ${t.category || t.project || ''}`.trim();
+    const planText = htmlToPlainText(t.plan) || '(なし)';
+    const recentText = htmlToPlainText(t.recent) || '(なし)';
+    const tip = `${t.id} / ${t.project || ''} / ${t.person || ''} / 期限:${t.deadline || '未設定'}\n`
+      + `【業務の段取り】\n${planText}\n\n【直近の動き】\n${recentText}`;
+    return `<div class="gantt-chip ${dl.cls}" data-row="${t.row}" title="${escapeHtml(tip)}">${escapeHtml(label)}</div>`;
+  }
+
+  let html = `<div class="gantt-header" style="grid-template-columns:${gridCols};">`;
+  html += `<div class="gantt-hcell gantt-rowlabel">グループ</div>`;
+  html += cols.map(c => `<div class="gantt-hcell">${c.label}</div>`).join('');
+  html += `</div>`;
+
+  groupNames.forEach(name => {
+    const tasks = groups.get(name);
+    html += `<div class="gantt-row" style="grid-template-columns:${gridCols};">`;
+    html += `<div class="gantt-cell gantt-rowlabel" title="${escapeHtml(name)}">${escapeHtml(name)} <span class="gantt-count">(${tasks.length})</span></div>`;
+    cols.forEach(c => {
+      const inCol = tasks
+        .filter(t => bucketOf(t.deadline) === c.key)
+        .sort((a, b) => String(a.deadline || '9999').localeCompare(String(b.deadline || '9999')));
+      const shown = inCol.slice(0, CHIP_LIMIT);
+      const rest = inCol.slice(CHIP_LIMIT);
+      let chips = shown.map(chipHtml).join('');
+      if (rest.length) {
+        chips += `<div class="gantt-more">+${rest.length}件 もっと見る</div>` +
+          `<div class="gantt-extra" style="display:none;">${rest.map(chipHtml).join('')}</div>`;
+      }
+      html += `<div class="gantt-cell">${chips}</div>`;
+    });
+    html += `</div>`;
+  });
+
+  const wrap = document.getElementById('ganttGrid');
+  wrap.innerHTML = html || '<p style="padding:10px;color:#888;">該当タスクがありません</p>';
+  wrap.querySelectorAll('.gantt-chip').forEach(chip => {
+    chip.addEventListener('click', () => openModal(Number(chip.dataset.row)));
+  });
+  wrap.querySelectorAll('.gantt-more').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const extra = btn.nextElementSibling;
+      const opening = extra.style.display === 'none';
+      extra.style.display = opening ? 'flex' : 'none';
+      btn.textContent = opening ? '▲ 閉じる' : btn.dataset.label;
+    });
+    btn.dataset.label = btn.textContent;
+  });
+}
+
+function toggleView() {
+  currentView = currentView === 'table' ? 'gantt' : 'table';
+  document.getElementById('viewTable').classList.toggle('view-hidden', currentView !== 'table');
+  document.getElementById('viewGantt').classList.toggle('view-hidden', currentView !== 'gantt');
+  document.getElementById('fGanttGroupBy').classList.toggle('view-hidden', currentView !== 'gantt');
+  document.getElementById('fGanttMonths').classList.toggle('view-hidden', currentView !== 'gantt');
+  document.getElementById('btnToggleView').textContent = currentView === 'table' ? '🗓 ロードマップ表示' : '📋 一覧表示';
+  render();
+}
+
+// セル一覧用: 改行で分割して最初の3行だけを表示（長い行は省略記号）
+ function preview3Html(text) {
+  if (!text) return '';
+  const lines = text.split('\n').filter(l => l.trim() !== '');
+  const shown = lines.slice(0, 3).map(l => l.length > 60 ? l.slice(0, 60) + '…' : l);
+  const suffix = lines.length > 3 ? ' …' : '';
+  return shown.map(l => `<div class="pline">${escapeHtml(l)}</div>`).join('') + (suffix ? `<div class="pline">${suffix}</div>` : '');
+}
+
+function renderSummary(list) {
+  const total = list.length;
+  const byStatus = {};
+  let overdue = 0, within7 = 0;
+  const today = new Date(); today.setHours(0,0,0,0);
+  list.forEach(t => {
+    const s = t.status_mark || '未設定';
+    byStatus[s] = (byStatus[s]||0) + 1;
+    if (t.deadline) {
+      const d = new Date(t.deadline); d.setHours(0,0,0,0);
+      const diff = Math.round((d-today)/86400000);
+      if (diff < 0) overdue++;
+      else if (diff <= 7) within7++;
+    }
+  });
+  const el = document.getElementById('summary');
+  el.innerHTML = `
+    <div class="card"><span class="num">${total}</span>表示件数</div>
+    <div class="card"><span class="num" style="color:#e53935">${overdue}</span>期限超過</div>
+    <div class="card"><span class="num" style="color:#fb8c00">${within7}</span>7日以内</div>
+    ${Object.entries(byStatus).map(([k,v]) => `<div class="card"><span class="num">${v}</span>${k||'未設定'}</div>`).join('')}
+  `;
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function openModal(row) {
+  currentRow = row;
+  const t = row != null ? DATA.tasks.find(x => x.row === row) : null;
+  currentUpdatedAt = t ? (t.updated_at || null) : null;
+  document.getElementById('modalTitle').textContent = t ? `タスク詳細 (${t.id})` : '新規タスク';
+  document.getElementById('fld_id').value = t ? t.id : '';
+  document.getElementById('fld_id').readOnly = !!t;
+  document.getElementById('fld_project').value = t ? t.project : '';
+  document.getElementById('fld_category').value = t ? t.category : '';
+  document.getElementById('fld_person').value = t ? t.person : '';
+  document.getElementById('fld_deadline').value = t && DATE_RE.test(t.deadline||'') ? t.deadline : '';
+  document.getElementById('fld_status_mark').value = t ? (t.status_mark||'') : '';
+  document.getElementById('fld_manhours').value = t ? (t.manhours ?? '') : '';
+  document.getElementById('fld_plan').innerHTML = t ? textToEditableHtml(t.plan) : '';
+  document.getElementById('fld_recent').innerHTML = t ? textToEditableHtml(t.recent) : '';
+  document.getElementById('fld_comment').innerHTML = t ? textToEditableHtml(t.comment) : '';
+  document.getElementById('fld_note2').value = t ? t.note2 : '';
+  document.getElementById('btnDelete').style.display = t ? 'inline-block' : 'none';
+  document.getElementById('btnClone').style.display = t ? 'inline-block' : 'none';
+  document.getElementById('modalOverlay').classList.add('show');
+
+  updateNavButtons();
+}
+
+// 既存タスクの番号をもとに、同じ命名規則(例: 4021.1 → 4021.2)で
+// 未使用の次のID候補を提案する
+function suggestNextId(sourceId) {
+  const allIds = new Set(DATA.tasks.map(t => String(t.id)));
+  const m = String(sourceId).match(/^(\d+)(?:\.(\d+))?$/);
+  if (!m) return '';
+  const base = m[1];
+  const startN = m[2] !== undefined ? parseInt(m[2], 10) + 1 : 1;
+  let n = startN;
+  let candidate = `${base}.${n}`;
+  while (allIds.has(candidate)) { n++; candidate = `${base}.${n}`; }
+  return candidate;
+}
+
+// 現在表示中のタスクのプロジェクト/機能/担当者を引き継いだまま、IDだけ連番候補を入れて新規作成画面を開く
+function cloneAsNewTask() {
+  if (currentRow == null) return;
+  const src = DATA.tasks.find(x => x.row === currentRow);
+  if (!src) return;
+  openModal(null);
+  document.getElementById('fld_id').value = suggestNextId(src.id);
+  document.getElementById('fld_project').value = src.project || '';
+  document.getElementById('fld_category').value = src.category || '';
+  document.getElementById('fld_person').value = src.person || '';
+}
+
+// 現在のフィルタ条件で表示中の一覧中で、今開いているタスクの前後へ移動する
+function navigate(delta) {
+  if (currentRow == null) return;
+  const list = getFiltered();
+  const idx = list.findIndex(t => t.row === currentRow);
+  if (idx === -1) return;
+  const newIdx = idx + delta;
+  if (newIdx < 0 || newIdx >= list.length) return;
+  openModal(list[newIdx].row);
+}
+
+function updateNavButtons() {
+  const btnPrev = document.getElementById('btnPrev');
+  const btnNext = document.getElementById('btnNext');
+  if (currentRow == null) {
+    btnPrev.style.display = 'none';
+    btnNext.style.display = 'none';
+    return;
+  }
+  btnPrev.style.display = 'inline-block';
+  btnNext.style.display = 'inline-block';
+  const list = getFiltered();
+  const idx = list.findIndex(t => t.row === currentRow);
+  btnPrev.disabled = (idx <= 0);
+  btnNext.disabled = (idx === -1 || idx >= list.length - 1);
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('show');
+  currentRow = null;
+}
+
+const STATUS_LABELS = {'◎':'重要','○':'報告あり','〇':'報告あり','●':'順調','▲':'遅延しそう','済':'完了','完':'完了'};
+
+async function saveTask() {
+  const mark = document.getElementById('fld_status_mark').value;
+  const body = {
+    id: document.getElementById('fld_id').value.trim(),
+    project: document.getElementById('fld_project').value.trim(),
+    category: document.getElementById('fld_category').value.trim(),
+    person: document.getElementById('fld_person').value.trim(),
+    deadline: document.getElementById('fld_deadline').value || null,
+    status_mark: mark,
+    status: STATUS_LABELS[mark] || (mark ? '' : '未設定'),
+    manhours: document.getElementById('fld_manhours').value,
+    plan: document.getElementById('fld_plan').innerHTML,
+    recent: document.getElementById('fld_recent').innerHTML,
+    comment: document.getElementById('fld_comment').innerHTML,
+    note2: document.getElementById('fld_note2').value,
+  };
+
+  let res;
+  if (currentRow != null) {
+    res = await fetch(`/api/tasks/${currentRow}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ ...body, expected_updated_at: currentUpdatedAt })
+    });
+  } else {
+    res = await fetch('/api/tasks', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+  }
+  if (res.status === 409) {
+    const err = await res.json();
+    alert(`⚠ ${err.message || '他の人が同時に更新したため保存できませんでした。'}\n画面を最新の内容に更新します。`);
+    closeModal();
+    await loadData();
+    return;
+  }
+  if (!res.ok) { alert('保存に失敗しました'); return; }
+  closeModal();
+  await loadData();
+}
+
+async function deleteTask() {
+  if (currentRow == null) return;
+  if (!confirm(`このタスクを削除しますか？`)) return;
+  const res = await fetch(`/api/tasks/${currentRow}`, { method: 'DELETE' });
+  if (!res.ok) { alert('削除に失敗しました'); return; }
+  closeModal();
+  await loadData();
+}
+
+document.getElementById('btnNew').addEventListener('click', () => openModal(null));
+document.getElementById('btnCancel').addEventListener('click', closeModal);
+document.getElementById('btnSave').addEventListener('click', saveTask);
+document.getElementById('btnDelete').addEventListener('click', deleteTask);
+document.getElementById('btnClone').addEventListener('click', cloneAsNewTask);
+document.getElementById('btnPrev').addEventListener('click', () => navigate(-1));
+document.getElementById('btnNext').addEventListener('click', () => navigate(1));
+
+// 画像貼り付け・挿入 ------------------------------------------------------
+// エクセルでは難しかった「テキスト中への画像埋め込み」をWeb版のメリットとして提供する。
+// 実装はシンプルにdata URL(base64)としてHTML内に直接埋め込む方式(サーバー側の変更不要)。
+// Excelエクスポート時はrichtext_bridge.py側のHTMLパーサーが<img>タグを認識せず
+// 自動的に読み飛ばすため、画像は単純に出力されない(仕様通り・エラーにはならない)。
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB。tasks.json肥大化防止の簡易ガード
+const _imgFileInput = document.createElement('input');
+_imgFileInput.type = 'file';
+_imgFileInput.accept = 'image/*';
+_imgFileInput.style.display = 'none';
+document.body.appendChild(_imgFileInput);
+let _imgTargetField = null;
+
+function insertImageDataUrl(field, dataUrl) {
+  field.focus();
+  document.execCommand('insertHTML', false, `<img src="${dataUrl}">`);
+}
+
+function readImageFileAsDataUrl(file, onLoad) {
+  if (file.size > MAX_IMAGE_BYTES) {
+    alert(`画像サイズが大きすぎます（${(file.size / 1024 / 1024).toFixed(1)}MB）。5MB以下の画像を使用してください。`);
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => onLoad(reader.result);
+  reader.readAsDataURL(file);
+}
+
+_imgFileInput.addEventListener('change', () => {
+  const file = _imgFileInput.files[0];
+  _imgFileInput.value = '';
+  if (file && _imgTargetField) {
+    readImageFileAsDataUrl(file, (dataUrl) => insertImageDataUrl(_imgTargetField, dataUrl));
+  }
+});
+
+// クリップボードからの画像貼り付け(Ctrl+V)に対応
+document.querySelectorAll('.rte').forEach(field => {
+  field.addEventListener('paste', (e) => {
+    const items = (e.clipboardData || window.clipboardData || {}).items || [];
+    for (const item of items) {
+      if (item.type && item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) readImageFileAsDataUrl(file, (dataUrl) => insertImageDataUrl(field, dataUrl));
+        return;
+      }
+    }
+    // 画像が無ければ通常のテキスト貼り付け動作に任せる
+  });
+});
+
+// 画像クリックで拡大表示(ライトボックス)。編集中のcontenteditable内でもクリックした瞬間だけ
+// 拡大表示に割り込ませる(カーソル配置より優先。画像の削除等は画像の左右をクリックして操作する)。
+const lightboxOverlay = document.getElementById('lightboxOverlay');
+const lightboxImg = document.getElementById('lightboxImg');
+document.querySelectorAll('.rte').forEach(field => {
+  field.addEventListener('click', (e) => {
+    if (e.target.tagName === 'IMG') {
+      e.preventDefault();
+      lightboxImg.src = e.target.src;
+      lightboxOverlay.classList.add('show');
+    }
+  });
+});
+lightboxOverlay.addEventListener('click', () => lightboxOverlay.classList.remove('show'));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && lightboxOverlay.classList.contains('show')) {
+    lightboxOverlay.classList.remove('show');
+  }
+});
+
+// リッチテキストツールバー（太字・文字色など）の初期化
+document.querySelectorAll('.rte-toolbar').forEach(toolbar => {
+  const field = document.getElementById(toolbar.dataset.target);
+  toolbar.querySelectorAll('button').forEach(btn => {
+    // mousedownでpreventDefaultしないと、ボタン押下時にcontenteditableのフォーカス/選択範囲が失われてしまう
+    btn.addEventListener('mousedown', (e) => e.preventDefault());
+    btn.addEventListener('click', () => {
+      field.focus();
+      if (btn.dataset.color) {
+        document.execCommand('foreColor', false, btn.dataset.color);
+      } else if (btn.dataset.img) {
+        _imgTargetField = field;
+        _imgFileInput.click();
+      } else if (btn.dataset.cmd) {
+        document.execCommand(btn.dataset.cmd, false, null);
+      }
+    });
+  });
+});
+
+// キーボードの↑↓で前後の案件に移動（テキスト入力欄等にフォーカスがある時は発動しない）
+document.addEventListener('keydown', (e) => {
+  if (!document.getElementById('modalOverlay').classList.contains('show')) return;
+  if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+  const active = document.activeElement;
+  const tag = active ? active.tagName.toLowerCase() : '';
+  const isEditable = tag === 'input' || tag === 'textarea' || tag === 'select' || (active && active.isContentEditable);
+  if (isEditable) return;
+  e.preventDefault();
+  navigate(e.key === 'ArrowDown' ? 1 : -1);
+});
+// 横幅リサイズのドラッグ操作がオーバーレイ上でmouseupすると誤って閉じてしまうため、
+// mousedownとclick(mouseup)の両方が背景自身で発生した場合のみ閉じるようにする
+let overlayMouseDownOnSelf = false;
+document.getElementById('modalOverlay').addEventListener('mousedown', (e) => {
+  overlayMouseDownOnSelf = (e.target.id === 'modalOverlay');
+});
+document.getElementById('modalOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'modalOverlay' && overlayMouseDownOnSelf) closeModal();
+});
+document.getElementById('fProject').addEventListener('change', render);
+document.getElementById('fPerson').addEventListener('change', render);
+document.getElementById('fText').addEventListener('input', render);
+document.getElementById('btnToggleView').addEventListener('click', toggleView);
+document.getElementById('fGanttGroupBy').addEventListener('change', render);
+document.getElementById('fGanttMonths').addEventListener('change', (e) => {
+  GANTT_MONTHS = parseInt(e.target.value, 10) || 3;
+  render();
+});
+document.getElementById('btnReset').addEventListener('click', () => {
+  document.getElementById('fProject').value = '';
+  document.getElementById('fPerson').value = '';
+  document.getElementById('fText').value = '';
+  statusFilter.clear();
+  document.querySelectorAll('#fStatus button').forEach(b => b.classList.remove('active'));
+  render();
+});
+document.getElementById('btnExport').addEventListener('click', () => {
+  window.location.href = '/api/export/excel';
+});
+document.getElementById('btnRefreshExcel').addEventListener('click', async () => {
+  if (!confirm('元Excelの最新内容を取り込みます。\nExcel側で変更された案件はWeb側の内容が上書きされます（Web上でのみ追加した案件は保持されます）。\nよろしいですか？')) return;
+  const btn = document.getElementById('btnRefreshExcel');
+  btn.disabled = true;
+  btn.textContent = '取込中...';
+  try {
+    const res = await fetch('/api/import/refresh', { method: 'POST' });
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      if (res.status === 404) {
+        alert('取込に失敗しました(404): サーバーがこの機能に未対応のようです。\nサーバー(server.py)を再起動してから、もう一度お試しください。');
+      } else {
+        alert(`取込に失敗しました(HTTP ${res.status}): サーバーから予期しない応答がありました。\nサーバーを再起動してから、もう一度お試しください。`);
+      }
+      return;
+    }
+    const result = await res.json();
+    if (!res.ok) {
+      alert(`取込に失敗しました: ${result.error || res.status}`);
+      return;
+    }
+    alert(`Excelから再取込しました。\n新規: ${result.added}件 / 更新: ${result.updated}件 / 変更なし: ${result.unchanged}件`);
+    await loadData();
+  } catch (e) {
+    alert('取込に失敗しました: ' + e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 Excelから再取込';
+  }
+});
+
+// バージョン履歴（自動保存されたバックアップの一覧・差分表示・復元） -----------------
+async function openBackupOverlay() {
+  document.getElementById('backupOverlay').classList.add('show');
+  showBackupListView();
+  await loadBackupList();
+}
+
+async function loadBackupList() {
+  const listEl = document.getElementById('backupList');
+  listEl.innerHTML = '<p style="padding:10px;color:#888;">読み込み中...</p>';
+  try {
+    const res = await fetch('/api/backups');
+    const result = await res.json();
+    const backups = result.backups || [];
+    if (backups.length === 0) {
+      listEl.innerHTML = '<p style="padding:10px;color:#888;">バックアップがまだありません（1回以上保存すると作成されます）。</p>';
+      return;
+    }
+    listEl.innerHTML = backups.map((b, i) => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 4px;border-bottom:1px solid var(--border);">
+        <div>
+          <div style="font-size:13px;">${b.label}${i === 0 ? '　<span style="color:var(--ok);font-size:11px;">(最新)</span>' : ''}</div>
+          <div style="font-size:11px;color:#999;">${(b.size/1024).toFixed(0)} KB</div>
+        </div>
+        <button class="btn-view-diff" data-filename="${b.filename}" data-label="${escapeHtml(b.label)}" style="background:var(--navy2);color:#fff;border:none;border-radius:4px;padding:5px 10px;cursor:pointer;font-size:12px;">差分を見る</button>
+      </div>
+    `).join('');
+    listEl.querySelectorAll('.btn-view-diff').forEach(btn => {
+      btn.addEventListener('click', () => showBackupDiffView(btn.dataset.filename, btn.dataset.label));
+    });
+  } catch (e) {
+    listEl.innerHTML = `<p style="padding:10px;color:var(--danger);">読み込みに失敗しました: ${e}</p>`;
+  }
+}
+
+function showBackupListView() {
+  document.getElementById('backupList').style.display = '';
+  document.getElementById('backupDiffView').style.display = 'none';
+  document.getElementById('btnBackupBack').style.display = 'none';
+  document.getElementById('backupModalTitle').textContent = '🕒 バージョン履歴';
+  document.getElementById('backupModalDesc').textContent = '保存のたびに自動作成されるスナップショット一覧。各バージョンの「差分を見る」で現在との違いを確認してから復元できます。';
+}
+
+const DIFF_FIELD_LABELS = {
+  id: '管理番号', project: '製品', category: '機能', person: '担当者',
+  plan: '段取り', recent: '進捗', deadline: '期限', status_mark: '打ち上げ',
+  status: 'ステータス', manhours: '工数', note2: '追記メモ', comment: 'コメント',
+};
+
+// フィールド値を差分表示用のプレーンテキストに変換(HTMLタグは剥がす)。
+// 長すぎる場合(文字単位差分のO(n*m)計算量対策)は文字単位差分を諾め、全体をハイライトするだけにフォールバックする。
+const DIFF_CHAR_LIMIT = 4000;
+function diffPlainText(v) {
+  if (v === null || v === undefined || v === '') return '';
+  const s = String(v);
+  return s.includes('<') ? htmlToPlainText(s) : s;
+}
+
+// LCSベースの文字単位差分。a=現在値、b=復元後値。
+// 戻り値: { aOps, bOps } それぞれ { ch, same } の配列
+ function computeCharDiff(a, b) {
+  const n = a.length, m = b.length;
+  const dp = new Array(n + 1);
+  for (let i = 0; i <= n; i++) dp[i] = new Uint16Array(m + 1);
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i+1][j+1] + 1 : Math.max(dp[i+1][j], dp[i][j+1]);
+    }
+  }
+  let i = 0, j = 0;
+  const aOps = [], bOps = [];
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      aOps.push({ ch: a[i], same: true });
+      bOps.push({ ch: b[j], same: true });
+      i++; j++;
+    } else if (dp[i+1][j] >= dp[i][j+1]) {
+      aOps.push({ ch: a[i], same: false });
+      i++;
+    } else {
+      bOps.push({ ch: b[j], same: false });
+      j++;
+    }
+  }
+  while (i < n) { aOps.push({ ch: a[i], same: false }); i++; }
+  while (j < m) { bOps.push({ ch: b[j], same: false }); j++; }
+  return { aOps, bOps };
+}
+
+function opsToHtml(ops, markStyle) {
+  let html = '';
+  let buf = '';
+  let bufSame = null;
+  const flush = () => {
+    if (!buf) return;
+    const escaped = escapeHtml(buf).replace(/\n/g, '<br>');
+    html += bufSame ? escaped : `<mark style="${markStyle}">${escaped}</mark>`;
+    buf = '';
+  };
+  for (const op of ops) {
+    if (bufSame === null) bufSame = op.same;
+    if (op.same !== bufSame) { flush(); bufSame = op.same; }
+    buf += op.ch;
+  }
+  flush();
+  return html || '(空欄)';
+}
+
+// 変更前/変更後の2行を、実際に変わった部分だけハイライトして返す(Excel Online風)。
+function renderFieldDiff(currentRaw, restoredRaw) {
+  const a = diffPlainText(currentRaw);
+  const b = diffPlainText(restoredRaw);
+  if (a === b) {
+    // 表示テキストは同じだが元の値(HTML)が異なる → 太字/文字色などの書式だけが変わった
+    // ケース。プレーンテキストのdiffでは差が見えないため、その旨を明示する。
+    const plain = escapeHtml(a).replace(/\n/g, '<br>') || '(空欄)';
+    return { currentHtml: plain, restoredHtml: plain, formatOnly: true };
+  }
+  if (a.length > DIFF_CHAR_LIMIT || b.length > DIFF_CHAR_LIMIT) {
+    // 長文は計算量対策で全体ハイライトにフォールバック
+    const at = escapeHtml(a.slice(0, 200)).replace(/\n/g, '<br>') || '(空欄)';
+    const bt = escapeHtml(b.slice(0, 200)).replace(/\n/g, '<br>') || '(空欄)';
+    return { currentHtml: at, restoredHtml: bt, formatOnly: false };
+  }
+  const { aOps, bOps } = computeCharDiff(a, b);
+  return {
+    currentHtml: opsToHtml(aOps, 'background:#ffcdd2;color:#b71c1c;padding:0 1px;'),
+    restoredHtml: opsToHtml(bOps, 'background:#c8e6c9;color:#1b5e20;padding:0 1px;'),
+    formatOnly: false,
+  };
+}
+
+function renderDiffHtml(diff) {
+  const { will_be_removed, will_be_added, will_be_changed } = diff;
+  const noDiff = will_be_removed.length === 0 && will_be_added.length === 0 && will_be_changed.length === 0;
+  let html = '';
+  if (noDiff) {
+    html += '<p style="padding:10px;color:#888;">現在の内容と同じです（差分はありません）。</p>';
+    html += `<div style="margin-top:14px;text-align:right;">
+      <button class="btn-do-restore" style="background:var(--danger);color:#fff;border:none;border-radius:4px;padding:8px 16px;cursor:pointer;font-size:13px;">このバージョンに戻す（変更なし）</button>
+    </div>`;
+    return html;
+  }
+
+  // 各changed行のフィールド差分を事前計算し、実質的な内容変更か書式のみかを判定しておく
+  // (「Excelから再取込」直後などは太字等の書式追加だけで大量に差分が出ることがあるため、
+  //  見た目のテキストは変わらない行を分けて集計・表示し、混乱を防ぐ)
+  const changedWithDiffs = will_be_changed.map(t => {
+    const fieldDiffs = Object.entries(t.fields).map(([f, v]) => ({ field: f, ...renderFieldDiff(v.current, v.restored) }));
+    const hasRealChange = fieldDiffs.some(fd => !fd.formatOnly);
+    return { t, fieldDiffs, hasRealChange };
+  });
+  const realChanges = changedWithDiffs.filter(c => c.hasRealChange);
+  const formatOnlyChanges = changedWithDiffs.filter(c => !c.hasRealChange);
+
+  function renderChangedCard({ t, fieldDiffs }) {
+    const fieldsHtml = fieldDiffs.map(({ field: f, currentHtml, restoredHtml, formatOnly }) => {
+      if (formatOnly) {
+        return `
+        <div style="margin:6px 0;">
+          <div style="font-size:11px;color:#777;">${DIFF_FIELD_LABELS[f] || f}
+            <span style="background:#eee;color:#666;border-radius:3px;padding:0 5px;font-size:10px;">📝 書式のみ変更（表示内容は同じ）</span>
+          </div>
+          <div style="font-size:12px;background:#fafafa;padding:3px 6px;border-radius:3px;">${currentHtml}</div>
+        </div>`;
+      }
+      return `
+      <div style="margin:6px 0;">
+        <div style="font-size:11px;color:#777;">${DIFF_FIELD_LABELS[f] || f}</div>
+        <div style="font-size:12px;background:#fafafa;padding:3px 6px;border-radius:3px;border-left:3px solid var(--danger);">現在: ${currentHtml}</div>
+        <div style="font-size:12px;background:#fafafa;padding:3px 6px;border-radius:3px;border-left:3px solid var(--ok);margin-top:2px;">復元後: ${restoredHtml}</div>
+      </div>`;
+    }).join('');
+    return `<div style="padding:6px 8px;border:1px solid var(--border);border-radius:4px;margin-bottom:8px;">
+      <b>${escapeHtml(String(t.id))}</b> ${escapeHtml(t.project||'')} / ${escapeHtml(t.category||'')} / 👤${escapeHtml(t.person||'')}
+      ${fieldsHtml}
+    </div>`;
+  }
+
+  html += `<div style="margin-bottom:10px;font-size:12px;">
+    <span style="color:var(--danger);">🗑 削除される: ${will_be_removed.length}件</span>　
+    <span style="color:var(--ok);">➕ 復活する: ${will_be_added.length}件</span>　
+    <span style="color:var(--warn);">✏️ 内容が変わる: ${realChanges.length}件</span>　
+    <span style="color:#999;">📝 書式のみ変更: ${formatOnlyChanges.length}件</span>
+  </div>`;
+
+  if (will_be_removed.length) {
+    html += '<h4 style="color:var(--danger);font-size:13px;margin:10px 0 4px;">🗑 復元すると削除される案件</h4>';
+    html += will_be_removed.map(t => `<div style="font-size:12px;padding:4px 8px;background:#ffebee;border-radius:4px;margin-bottom:4px;">
+      <b>${escapeHtml(String(t.id))}</b> ${escapeHtml(t.project||'')} / ${escapeHtml(t.category||'')} / 👤${escapeHtml(t.person||'')}
+    </div>`).join('');
+  }
+  if (will_be_added.length) {
+    html += '<h4 style="color:var(--ok);font-size:13px;margin:10px 0 4px;">➕ 復元すると復活する案件</h4>';
+    html += will_be_added.map(t => `<div style="font-size:12px;padding:4px 8px;background:#e8f5e9;border-radius:4px;margin-bottom:4px;">
+      <b>${escapeHtml(String(t.id))}</b> ${escapeHtml(t.project||'')} / ${escapeHtml(t.category||'')} / 👤${escapeHtml(t.person||'')}
+    </div>`).join('');
+  }
+  if (realChanges.length) {
+    html += '<h4 style="color:var(--warn);font-size:13px;margin:10px 0 4px;">✏️ 内容が変わる案件</h4>';
+    html += realChanges.map(renderChangedCard).join('');
+  }
+  if (formatOnlyChanges.length) {
+    html += `<details style="margin-top:10px;">
+      <summary style="cursor:pointer;color:#777;font-size:13px;">📝 書式のみ変更された案件（表示内容は同じ）: ${formatOnlyChanges.length}件 — クリックで表示</summary>
+      <div style="margin-top:6px;">${formatOnlyChanges.map(renderChangedCard).join('')}</div>
+    </details>`;
+  }
+
+  html += `<div style="margin-top:14px;text-align:right;">
+    <button class="btn-do-restore" style="background:var(--danger);color:#fff;border:none;border-radius:4px;padding:8px 16px;cursor:pointer;font-size:13px;">このバージョンに復元する</button>
+  </div>`;
+  return html;
+}
+
+async function showBackupDiffView(filename, label) {
+  document.getElementById('backupList').style.display = 'none';
+  document.getElementById('btnBackupBack').style.display = '';
+  document.getElementById('backupModalTitle').textContent = `🔍 差分: ${label}`;
+  document.getElementById('backupModalDesc').textContent = 'このバージョンに復元した場合、現在の内容から以下のように変わります。';
+  const diffEl = document.getElementById('backupDiffView');
+  diffEl.style.display = '';
+  diffEl.innerHTML = '<p style="padding:10px;color:#888;">比較中...</p>';
+  try {
+    const res = await fetch(`/api/backups/${encodeURIComponent(filename)}/diff`);
+    const diff = await res.json();
+    if (!res.ok) {
+      diffEl.innerHTML = `<p style="padding:10px;color:var(--danger);">差分取得に失敗しました: ${diff.error || res.status}</p>`;
+      return;
+    }
+    diffEl.innerHTML = renderDiffHtml(diff);
+    const restoreBtn = diffEl.querySelector('.btn-do-restore');
+    if (restoreBtn) restoreBtn.addEventListener('click', () => doRestore(filename));
+  } catch (e) {
+    diffEl.innerHTML = `<p style="padding:10px;color:var(--danger);">差分取得に失敗しました: ${e}</p>`;
+  }
+}
+
+async function doRestore(filename) {
+  if (!confirm(`このバージョンに復元します（${filename}）。\n現在の内容は自動的にバックアップされてから復元されます。よろしいですか？`)) return;
+  try {
+    const res = await fetch(`/api/backups/${encodeURIComponent(filename)}/restore`, { method: 'POST' });
+    const result = await res.json();
+    if (!res.ok) {
+      alert(`復元に失敗しました: ${result.error || res.status}`);
+      return;
+    }
+    alert(`復元しました（${result.task_count}件）。`);
+    document.getElementById('backupOverlay').classList.remove('show');
+    await loadData();
+  } catch (e) {
+    alert('復元に失敗しました: ' + e);
+  }
+}
+
+document.getElementById('btnBackups').addEventListener('click', openBackupOverlay);
+document.getElementById('btnBackupBack').addEventListener('click', showBackupListView);
+document.getElementById('btnBackupClose').addEventListener('click', () => {
+  document.getElementById('backupOverlay').classList.remove('show');
+});
+document.getElementById('backupOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'backupOverlay') document.getElementById('backupOverlay').classList.remove('show');
+});
+
+loadData();
+</script>
+</body>
+</html>
