@@ -105,11 +105,13 @@ python app/import_excel.py "<元Excelパスxlsx>" app/data/tasks.json
 
 上記3つの手段はいずれも**データ（`data/tasks.json`の中身）のバックアップ**であり、
 アプリ本体のコード（`server.py`・`public/index.html`等）はカバーしない。
-コード自体は`manage_exp_progress`フォルダごとOneDrive同期対象なので、OneDriveの
-バージョン履歴・ごみ箱機能で復旧は可能だが、**Gitでは管理されていない**
-（このリポジトリの`.gitignore`は元々TimeTracker関連ファイルのみを対象にしたホワイトリスト
-方式で、`manage_exp_progress/`は対象外）。コード自体の変更履歴・世代管理まで欲しい場合は、
-別途Git管理下に置くことを検討する（要望があれば対応）。
+
+コード自体は、`Dankomi_Outlook_Nippo`リポジトリ（`wr.ps1`と同じリポジトリ）にGit管理下で
+追跡されている（`server.py`/`import_excel.py`/`export_excel.py`/`richtext_bridge.py`/
+`sharepoint_backup.py`/`public/index.html`/`README.md`）。`app/data/`（業務データ本体・
+ローカルバックアップ・元Excelパス設定）と`app/.msal_token_cache.json`（SharePoint認証
+キャッシュ）は個人情報・認証情報のため引き続きGit管理対象外（`.gitignore`で除外）。
+これらはOneDrive同期のみでカバーされ、OneDriveのバージョン履歴・ごみ箱機能で復旧する。
 
 ### 既知の注意点（複数PCから同時に書き込むと競合コピーが発生する）
 
