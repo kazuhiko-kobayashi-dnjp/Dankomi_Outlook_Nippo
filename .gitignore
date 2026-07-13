@@ -47,6 +47,8 @@ tools/nippo/*
 !manage_exp_progress/
 manage_exp_progress/*
 !manage_exp_progress/README.md
+!manage_exp_progress/CLAUDE.md
+!manage_exp_progress/requirements.txt
 !manage_exp_progress/app/
 manage_exp_progress/app/*
 !manage_exp_progress/app/server.py

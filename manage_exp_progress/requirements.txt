@@ -1,0 +1,7 @@
+flask>=3.0
+openpyxl>=3.1.0
+
+# 以下はチームSharePointへの自動バックアップ機能(sharepoint_backup.py)でのみ使用する任意機能。
+# 未インストールでもserver.py本体は問題なく動作する(soft dependencyとしてtry/exceptで囲んである)。
+msal>=1.28.0
+requests>=2.28.0
