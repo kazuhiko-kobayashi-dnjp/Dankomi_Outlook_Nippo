@@ -12,6 +12,7 @@
 #   .\wr.ps1 -Model gpt-4o -Summarize  # モデル指定（省略時: gpt-4o-mini）
 #   .\wr.ps1 -Prompt                   # プロンプトのみ出力（API 不要、手貼り用）
 #   .\wr.ps1 -Auth                     # トークン切れ時の再認証
+#   .\wr.ps1 -Summarize -TaskWeb       # 業務進捗表をExcelの代わりにmanage_exp_progressのtasks.jsonから読む
 #
 # 月曜日に先週分を取得したいとき:
 #   .\wr.ps1 -Days 7 -Summarize        # 月曜朝に実行 → 先週月〜日をカバー
@@ -21,6 +22,7 @@
 #   自分の担当者名(task_owner)・業務進捗Excelパス(task_excel_path)を記入すると、
 #   -TaskOwner / -TaskExcel を毎回指定しなくてもよくなる（このファイルはgit管理対象外）。
 #   もしくは .\wr.ps1 -TaskOwner "自分の名前" -SaveTaskOwner -Prompt で担当者名だけ保存も可能。
+#   Excelの代わりに manage_exp_progress (Web化システム) を使う場合は -TaskWeb を付ける。
 #
 # Output: output\weekly_report_YYYYMMDD_HHMM.md
 #         output\summary_prompt_YYYYMMDD_HHMM.txt  (-Prompt 時)
@@ -39,6 +41,8 @@ param(
     [switch] $Auth,                 # 再認証（Device Code Flow）
     [string] $NippoDir    = "",     # 日報ディレクトリ（省略時: 自動検出）
     [string] $TaskExcel   = "",     # 業務進捗Excelパス（省略時: tools\.user_config.json の task_excel_path）
+    [switch] $TaskWeb,               # 業務進捗表の取得元をExcelの代わりにmanage_exp_progressのtasks.jsonにする
+    [string] $TaskJson    = "",     # manage_exp_progressのtasks.jsonパス（省略時: tools\.user_config.json の task_json_path、それも無ければ既定の相対パス）
     [string] $TaskOwner   = "",     # 業務進捗表の担当者フィルタ（省略時: tools\.user_config.json の task_owner）
     [switch] $SaveTaskOwner          # TaskOwner を tools\.user_config.json に保存
 )
@@ -64,9 +68,11 @@ if ($Model)          { $a += '--model'; $a += $Model }
 if ($Auth)           { $a += '--device-code' }
 if ($NippoDir)       { $a += '--nippo-dir'; $a += $NippoDir }
 if ($TaskExcel)      { $a += '--task-excel'; $a += $TaskExcel }
+if ($TaskWeb)        { $a += '--task-source'; $a += 'web' }
+if ($TaskJson)       { $a += '--task-json'; $a += $TaskJson }
 if ($TaskOwner)      { $a += '--task-owner'; $a += $TaskOwner }
 if ($SaveTaskOwner)  { $a += '--save-task-owner' }
-# TaskExcel/TaskOwner 省略時のデフォルトは tools\teams_weekly_report.py 側が
+# TaskExcel/TaskOwner/TaskJson 省略時のデフォルトは tools\teams_weekly_report.py 側が
 # tools\.user_config.json（git管理対象外・個人設定）から読み込む。
 # ファイルが無ければ何も自動設定されず、業務進捗表セクションは単に省略される
 # （第三者配布時も安全に動作する）。設定例は tools\.user_config.example.json を参照。

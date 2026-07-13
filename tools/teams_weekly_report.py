@@ -803,6 +803,60 @@ def load_task_excel(xlsx_path: str, name_filter: str = "") -> list[dict]:
     return tasks
 
 
+# ── manage_exp_progress (Web化システム) の tasks.json 読み込み ──────────────
+_TASK_HTML_TAG_BLOCK_RE = re.compile(r"</?(?:div|p|br)[^>]*>", re.IGNORECASE)
+_TASK_HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _html_to_plain(text: str) -> str:
+    """manage_exp_progressのリッチテキスト(HTML)欄をプレーンテキストに変換する。
+    画像(<img>タグ、貼り付け機能で挿入されたdata URL含む)はタグごと除去されるため、
+    本文には影響しない。"""
+    if not text:
+        return ""
+    if "<" not in text:
+        return text
+    import html as _html
+    t = _TASK_HTML_TAG_BLOCK_RE.sub("\n", text)
+    t = _TASK_HTML_TAG_RE.sub("", t)
+    return _html.unescape(t)
+
+
+def load_task_json(json_path: str, name_filter: str = "") -> list[dict]:
+    """manage_exp_progress(Web化システム)のdata/tasks.jsonから担当者=name_filterの行を読み込む。
+    load_task_excel()と同じ戻り値の形(キー名)にする。
+    name_filterが空の場合は担当者で絞り込まず全行を対象とする。"""
+    import json as _json
+    try:
+        with open(json_path, encoding="utf-8") as f:
+            data = _json.load(f)
+    except Exception as e:
+        print(f"[WARN] tasks.json読み込み失敗: {e}", flush=True)
+        return []
+
+    tasks = []
+    for t in data.get("tasks", []):
+        person = t.get("person") or ""
+        if name_filter and name_filter not in person:
+            continue
+        if not t.get("plan") and not t.get("recent"):
+            continue
+        manhours = t.get("manhours")
+        tasks.append({
+            "製品":      t.get("project") or "",
+            "業務ジャンル": t.get("category") or "",
+            "担当者":    person,
+            "段取り":    _html_to_plain(t.get("plan") or "")[:200],
+            "進捗":      _html_to_plain(t.get("recent") or "")[:400],
+            "期限":      (t.get("deadline") or "").replace("-", "/"),
+            "打ち上げ":  t.get("status_mark") or "",
+            "工数(H)":   str(manhours) if manhours else "",
+        })
+    owner_label = name_filter or "(全員)"
+    print(f"[INFO] 業務進捗表(Web): {len(tasks)} 行 (担当者={owner_label})", flush=True)
+    return tasks
+
+
 # ── AI 要約 ──────────────────────────────────────────────────────────
 def _build_summary_prompt(records: list[dict], days: int,
                           nippo_text: str = "",
@@ -1030,6 +1084,9 @@ def main():
     ap.add_argument("--model",       type=str, default="",    help="使用モデル名（例: gpt-4o-mini, gpt-4o, Llama-3.3-70B-Instruct）")
     ap.add_argument("--nippo-dir",   type=str, default="",    help="日報ディレクトリ（省略時: スクリプト/../日報/YYYY/）")
     ap.add_argument("--task-excel",  type=str, default="",    help="業務進捗Excelファイルのパス（省略時: tools/.user_config.jsonのtask_excel_path）")
+    ap.add_argument("--task-source", choices=["excel", "web"], default="excel",
+                     help="業務進捗データの取得元 (excel=Excelファイル直接読込 / web=manage_exp_progressのtasks.json)")
+    ap.add_argument("--task-json",   type=str, default="",    help="manage_exp_progressのtasks.jsonのパス（--task-source web の時のみ使用。省略時: tools/.user_config.jsonのtask_json_path、それも無ければ manage_exp_progress/app/data/tasks.json）")
     ap.add_argument("--task-owner",  type=str, default="",    help="業務進捗表のフィルタ担当者名（省略時: tools/.user_config.jsonのtask_owner）")
     ap.add_argument("--save-task-owner", action="store_true", help="--task-owner で指定した値を tools/.user_config.json に保存して次回から省略可能にする")
     args = ap.parse_args()
@@ -1039,6 +1096,8 @@ def main():
         args.task_owner = _user_cfg.get("task_owner", "")
     if not args.task_excel:
         args.task_excel = _user_cfg.get("task_excel_path", "")
+    if not args.task_json:
+        args.task_json = _user_cfg.get("task_json_path", "")
 
     if args.save_key and args.api_key:
         _save_api_key(args.api_key)
@@ -1093,10 +1152,15 @@ def main():
         else:
             print(f"[INFO] 日報ディレクトリが見つかりません: {_nippo_base}", flush=True)
 
-    # ─ 業務進捗Excel読み込み ─
+    # ─ 業務進捗表読み込み (Excel 直接 or manage_exp_progressのtasks.json) ─
     task_rows: list[dict] | None = None
-    if (args.summarize or args.prompt_only) and args.task_excel:
-        task_rows = load_task_excel(args.task_excel, name_filter=args.task_owner)
+    if args.summarize or args.prompt_only:
+        if args.task_source == "web":
+            json_path = args.task_json or str(
+                Path(__file__).parent.parent / "manage_exp_progress" / "app" / "data" / "tasks.json")
+            task_rows = load_task_json(json_path, name_filter=args.task_owner)
+        elif args.task_excel:
+            task_rows = load_task_excel(args.task_excel, name_filter=args.task_owner)
 
     # ─ AI 要約 or プロンプト出力 ─
     ai_summary = None

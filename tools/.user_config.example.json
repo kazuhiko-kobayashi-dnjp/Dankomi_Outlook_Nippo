@@ -1,5 +1,6 @@
 {
   "_comment": "このファイルを tools/.user_config.json にコピーし、自分用の値に書き換えてください。.user_config.json はgit管理対象外(.gitignore)なので、ここに書いても他人に公開されません。",
-  "task_owner": "自分の名字（業務進捗Excelの担当者列でフィルタする文字列）",
-  "task_excel_path": "C:\\Users\\your_name\\OneDrive\\path\\to\\your_task_progress.xlsx"
+  "task_owner": "自分の名字（業務進捗Excel/tasks.jsonの担当者列でフィルタする文字列）",
+  "task_excel_path": "C:\\Users\\your_name\\OneDrive\\path\\to\\your_task_progress.xlsx",
+  "task_json_path": "manage_exp_progress/app/data/tasks.json のパス（-TaskWeb使用時のみ。省略時は既定の相対パスを自動使用）"
 }
