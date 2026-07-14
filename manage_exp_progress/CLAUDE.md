@@ -37,6 +37,37 @@ Excelで管理していた「露出制御業務進捗管理」表を、複数人
   **必ず手動でFlaskプロセスを再起動**しないと、古いAPIのままで
   「Unexpected token '<'」のようなエラーになる。
 
+## 開発運用: 「WSLで編集 → Windowsで実行」(2026-07-14 確立)
+Claude CodeがWSL上でしか動かないため、**コード編集はWSL、Flask本番はWindowsで実行**
+という分担にした。サーバーを起動するのは常にWindowsの1プロセスだけなので、
+tasks.jsonへの二重書き込み(OneDrive競合コピー事故)が構造的に発生しない。
+- WSL側checkout: `/home/<user>/workspace/Dankomi_Outlook_Nippo/manage_exp_progress`
+  (`app/data`と`app/.msal_token_cache.json`は`/mnt/f/...OneDrive`へのsymlink)
+- Windows側checkout(本番): `F:\OneDrive_F\OneDrive - DENSO\2017\else\memo`
+  配下の`manage_exp_progress\app`。両者とも同じGitHubリポジトリのclone。
+- **反映は手動コピー禁止・git経由**: WSLで編集→commit→push、Windowsで`git pull`→再起動。
+- この一連(停止→pull→再起動→稼働確認)をWSLからワンコマンドで回す
+  **`deploy_restart.sh`**(git管理外のローカル運用ツール)を用意した。
+  `./deploy_restart.sh` 実行だけでデバッグループが人間の介在なしで回る。
+  ログは`app/server_out.log`(git管理外)へ出るので`tail -f`で追える。
+
+### deploy_restart.sh 実装時に潰した3つの罠(再発防止)
+1. **Windows側checkoutが全ファイルCRLF、WSL側がLF**。git上「全行変更」に見え
+   (`--ignore-all-space`で差分ゼロ)、放置すると`git pull`がブロックされる。
+   → pull直前に`manage_exp_progress`サブツリーだけ`git checkout -- <subtree>`で
+   作業ツリーを捨ててから`merge --ff-only`。他パス(timetracker等の進行中作業)には触れない。
+2. **バックグラウンド起動時stdoutがcp932になる** → 起動メッセージの絵文字🚀で
+   `UnicodeEncodeError`が出てFlaskが即クラッシュ(手動起動のUTF-8端末では顕在化しない)。
+   → `PYTHONUTF8=1`を渡す。
+3. **WSL interopからWindowsプロセスを完全デタッチ起動する方法**:
+   `cmd /c start /b`はcmd終了時に子が道連れで死ぬ、PowerShell`Start-Process
+   -RedirectStandardOutput`はハンドルを掴んだままブロックして戻らない。
+   → **VBScript(`WScript.Shell.Run cmd, 0, False`)**が唯一ブロックせず生き残る。
+   `deploy_restart.sh`が`_launch_server.vbs`(git管理外)を生成してwscriptで叩いている。
+- 注: 3100プロセスの特定/停止/起動確認はWSLから`powershell.exe Get-NetTCPConnection`
+  /`Stop-Process`で行う。WindowsのpythonパスとWSL IPはスクリプト冒頭にハードコード
+  してあるので、環境が変わったら`PY_WIN`と(portproxy運用に戻すなら)connectaddressを更新する。
+
 ## 直近のセッション(2026-07-14)で対応した内容
 1. **Git管理化**: `Dankomi_Outlook_Nippo`リポジトリの`.gitignore`にホワイトリストを
    追加し、アプリコードのみ追跡開始(データ・認証情報は対象外のまま)。
