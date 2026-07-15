@@ -64,5 +64,9 @@ manage_exp_progress/app/*
 output/*
 !output/tt_delete_date.py
 
+# Teams会議録画 -> transcript(VTT)取得 / DR勧告表用JSON生成 (Power Automate連携向け)
+!auto_summarize_recordings.py
+!auto_summarize_recordings_v3.py
+
 # APIキーは絶対に追跡しない
 tt_apikey.txt
