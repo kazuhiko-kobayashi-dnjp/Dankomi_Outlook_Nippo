@@ -2,8 +2,10 @@
 # -*- coding: utf-8 -*-
 """
 schedule_tasks.py
-進捗管理 Excel から担当タスクを読み取り、Outlook の今週スケジュールの
-空き時間帯に自動挿入する。フォーカス時間は削除して空き枠を確保。
+露出制御業務進捗管理(manage_exp_progress, http://10.41.55.204:3100/ / tasks.json)
+から担当タスクを読み取り、Outlook の今週スケジュールの空き時間帯に自動挿入する。
+フォーカス時間は削除して空き枠を確保。
+（--source excel を指定すると旧・進捗管理Excelを直接読み込む方式にも切替可能）
 
 Usage:
     # dry-run（確認のみ）
@@ -27,6 +29,8 @@ from datetime import datetime, timedelta
 # ──────────────────────────────────────────────────────────────────────
 EXCEL_PATH   = (r'C:\Users\10001179776\OneDrive - DENSO\2019\Else\99_temp'
                 r'\◎250217_露出制御業務進捗及び報告.xlsx')
+JSON_PATH    = (r'C:\Users\10001179776\OneDrive - DENSO\2017\else\memo'
+                r'\manage_exp_progress\app\data\tasks.json')
 SHEET_NAME   = 'Sheet1'
 PERSON       = '小林'
 WORK_START   = 6.5  # 06:30
@@ -142,6 +146,69 @@ def load_tasks(excel_path: str = EXCEL_PATH) -> list:
 
     wb.close()
     # H列の優先度順（◎ > ○ > ●）でソート
+    tasks.sort(key=lambda t: PRIORITY_ORDER.get(str(t['priority'] or ''), 99))
+    return tasks
+
+
+_TAG_BLOCK_RE = re.compile(r'</?(?:div|p|br)[^>]*>', re.IGNORECASE)
+_TAG_RE       = re.compile(r'<[^>]+>')
+
+
+def _html_to_plain(text: str) -> str:
+    """Web版(manage_exp_progress)のリッチテキスト(HTML)欄をプレーンテキストに変換する。"""
+    if not text:
+        return ''
+    if '<' not in text:
+        return text
+    import html as _html
+    t = _TAG_BLOCK_RE.sub('\n', text)
+    t = _TAG_RE.sub('', t)
+    return _html.unescape(t)
+
+
+def load_tasks_from_json(json_path: str = JSON_PATH) -> list:
+    """
+    manage_exp_progress の data/tasks.json から読み込む版。
+    load_tasks()（Excel直接読込）と同じ抽出条件・同じ戻り値の形にする:
+    担当者=小林 かつ 状況≠空白・済 かつ 工数≠0 の案件。
+    """
+    import json
+
+    with open(json_path, encoding='utf-8') as f:
+        data = json.load(f)
+
+    tasks = []
+    for t in data.get('tasks', []):
+        person = t.get('person') or ''
+        status_mark = t.get('status_mark')
+        manhours = t.get('manhours')
+
+        if status_mark in (None, '', '済'):
+            continue
+        if PERSON not in person:
+            continue
+        if not manhours or manhours == 0:
+            continue
+
+        e_text = _html_to_plain(t.get('plan') or '').strip()
+        f_text = _html_to_plain(t.get('recent') or '').strip()
+        first_line = f_text.split('\n')[0].strip()
+        if not first_line:
+            continue
+
+        try:
+            dur_h = float(manhours)
+        except (TypeError, ValueError):
+            dur_h = 1.0
+        dur_h = max(0.5, min(dur_h, 4.0))
+
+        category = (_normalize_category(t.get('project') or '')
+                   or _normalize_category(first_line))
+
+        tasks.append({'title': first_line, 'duration_h': dur_h,
+                      'priority': status_mark, 'category': category,
+                      'e_col': e_text, 'f_col': f_text})
+
     tasks.sort(key=lambda t: PRIORITY_ORDER.get(str(t['priority'] or ''), 99))
     return tasks
 
@@ -340,7 +407,13 @@ def main():
     parser.add_argument('--clear', action='store_true',
                         help='自動登録タスクを削除してから再スケジュール（--execute と組み合わせ可）')
     parser.add_argument('--file', default=EXCEL_PATH,
-                        help='Excel ファイルパス')
+                        help='Excel ファイルパス (--source excel の時のみ使用)')
+    parser.add_argument('--source', choices=['excel', 'web'], default='web',
+                        help='タスクの取得元: web=manage_exp_progress(露出制御業務進捗管理, '
+                             'http://10.41.55.204:3100/)のtasks.jsonから読み込み(デフォルト) / '
+                             'excel=旧進捗管理Excelを直接読み込み')
+    parser.add_argument('--json', default=JSON_PATH,
+                        help='tasks.json パス (--source web の時のみ使用)')
     args = parser.parse_args()
 
     dry_run = not args.execute
@@ -357,13 +430,17 @@ def main():
     week_end = week_start + timedelta(days=4)
 
     print(f'[INFO] モード      : {"dry-run（確認のみ）" if dry_run else "EXECUTE（Outlook 操作）"}')
+    print(f'[INFO] データ取得元  : {"manage_exp_progress (tasks.json / http://10.41.55.204:3100/)" if args.source == "web" else "進捗管理Excel（直接）"}')
     print(f'[INFO] 対象週      : {week_start.strftime("%Y-%m-%d")} (月) ～ {week_end.strftime("%Y-%m-%d")} (金)')
     print()
 
     # ── タスク読み込み ──
-    tasks = load_tasks(args.file)
+    if args.source == 'web':
+        tasks = load_tasks_from_json(args.json)
+    else:
+        tasks = load_tasks(args.file)
     if not tasks:
-        print('[WARN] タスクなし（D列=小林 かつ H列≠空白/済 かつ I列≠0）')
+        print('[WARN] タスクなし（担当者=小林 かつ 状況≠空白/済 かつ 工数≠0）')
         return
 
     total_h = sum(t['duration_h'] for t in tasks)
