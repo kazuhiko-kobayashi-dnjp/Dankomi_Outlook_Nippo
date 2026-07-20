@@ -640,7 +640,6 @@ function openModal(row) {
   currentUpdatedAt = t ? (t.updated_at || null) : null;
   document.getElementById('modalTitle').textContent = t ? `タスク詳細 (${t.id})` : '新規タスク';
   document.getElementById('fld_id').value = t ? t.id : '';
-  document.getElementById('fld_id').readOnly = !!t;
   document.getElementById('fld_project').value = t ? t.project : '';
   document.getElementById('fld_category').value = t ? t.category : '';
   document.getElementById('fld_person').value = t ? t.person : '';
