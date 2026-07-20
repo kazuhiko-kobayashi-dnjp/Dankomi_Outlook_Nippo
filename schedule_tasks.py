@@ -19,20 +19,55 @@ Usage:
 
 import sys
 import re
+import json
 import argparse
 import unicodedata
 import warnings
+from pathlib import Path
 from datetime import datetime, timedelta
+
+# ──────────────────────────────────────────────────────────────────────
+# 個人設定 (tools/.user_config.json) 読み込み
+# ──────────────────────────────────────────────────────────────────────
+# wr.ps1 (tools/teams_weekly_report.py) と同じ設定ファイルを共有する。
+# 配布先の人はこのファイルをコピーして task_owner / task_json_path / task_excel_path を
+# 自分の値に書き換えれば、下記のハードコード値を変更せずに使える(このファイルはgit管理対象外)。
+_USER_CONFIG_FILE = Path(__file__).parent / 'tools' / '.user_config.json'
+
+
+def _load_user_config() -> dict:
+    if not _USER_CONFIG_FILE.exists():
+        return {}
+    try:
+        return json.loads(_USER_CONFIG_FILE.read_text(encoding='utf-8'))
+    except Exception as e:
+        print(f'[WARN] {_USER_CONFIG_FILE} の読み込みに失敗しました: {e}')
+        return {}
+
+
+def _save_user_config(**updates):
+    """既存設定に updates をマージして .user_config.json に保存"""
+    cfg = _load_user_config()
+    cfg.update(updates)
+    _USER_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _USER_CONFIG_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding='utf-8')
+    print(f'[INFO] 個人設定を保存しました: {_USER_CONFIG_FILE}')
+
 
 # ──────────────────────────────────────────────────────────────────────
 # 設定
 # ──────────────────────────────────────────────────────────────────────
-EXCEL_PATH   = (r'C:\Users\10001179776\OneDrive - DENSO\2019\Else\99_temp'
-                r'\◎250217_露出制御業務進捗及び報告.xlsx')
-JSON_PATH    = (r'C:\Users\10001179776\OneDrive - DENSO\2017\else\memo'
-                r'\manage_exp_progress\app\data\tasks.json')
+# 以下は小林個人の環境向けフォールバック値。配布先の人は tools/.user_config.json の
+# task_owner / task_json_path / task_excel_path で上書きするか、--person / --json / --file 引数を使う。
+_LEGACY_EXCEL_PATH = (r'C:\Users\10001179776\OneDrive - DENSO\2019\Else\99_temp'
+                      r'\◎250217_露出制御業務進捗及び報告.xlsx')
+# manage_exp_progress/app/data/tasks.json はリポジトリ相対パスで解決する
+# (このリポジトリを自分のOneDrive配下にクローン/同期している人なら誰でもそのまま使える)。
+DEFAULT_JSON_PATH = Path(__file__).parent / 'manage_exp_progress' / 'app' / 'data' / 'tasks.json'
+EXCEL_PATH   = _LEGACY_EXCEL_PATH  # 後方互換のため維持。実値は main() で解決される
+JSON_PATH    = str(DEFAULT_JSON_PATH)
 SHEET_NAME   = 'Sheet1'
-PERSON       = '小林'
+PERSON       = '小林'  # 実際の値は main() で --person / .user_config.json の task_owner により上書きされる
 WORK_START   = 6.5  # 06:30
 WORK_END     = 20   # 18:00
 MIN_SLOT_MIN = 30   # 30 分未満のスロットは使わない
@@ -166,17 +201,12 @@ def _html_to_plain(text: str) -> str:
     return _html.unescape(t)
 
 
-def load_tasks_from_json(json_path: str = JSON_PATH) -> list:
+def _extract_tasks_from_web_data(data: dict) -> list:
     """
-    manage_exp_progress の data/tasks.json から読み込む版。
-    load_tasks()（Excel直接読込）と同じ抽出条件・同じ戻り値の形にする:
-    担当者=小林 かつ 状況≠空白・済 かつ 工数≠0 の案件。
+    manage_exp_progress の tasks.json 相当のデータ(dict)から抽出する共通ロジック。
+    load_tasks_from_json() / load_tasks_from_url() の両方から使う。
+    担当者=PERSON かつ 状況≠空白・済 かつ 工数≠0 の案件。
     """
-    import json
-
-    with open(json_path, encoding='utf-8') as f:
-        data = json.load(f)
-
     tasks = []
     for t in data.get('tasks', []):
         person = t.get('person') or ''
@@ -211,6 +241,28 @@ def load_tasks_from_json(json_path: str = JSON_PATH) -> list:
 
     tasks.sort(key=lambda t: PRIORITY_ORDER.get(str(t['priority'] or ''), 99))
     return tasks
+
+
+def load_tasks_from_json(json_path: str = JSON_PATH) -> list:
+    """
+    manage_exp_progress の data/tasks.json をローカルファイルとして直接読み込む版。
+    OneDrive同期等でこのファイルにローカルアクセスできる環境向け(既定)。
+    """
+    with open(json_path, encoding='utf-8') as f:
+        data = json.load(f)
+    return _extract_tasks_from_web_data(data)
+
+
+def load_tasks_from_url(url: str) -> list:
+    """
+    manage_exp_progress の GET /api/tasks をHTTP経由で取得する版。
+    OneDrive同期パスにアクセスできない配布先の人向け(サーバーに直接アクセスできれば
+    ローカルファイルコピーが無くても使える)。
+    """
+    import requests
+    resp = requests.get(url, timeout=10)
+    resp.raise_for_status()
+    return _extract_tasks_from_web_data(resp.json())
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -398,6 +450,8 @@ def categorize_existing_events(calendar, date: datetime, dry_run: bool) -> None:
 # メイン
 # ──────────────────────────────────────────────────────────────────────
 def main():
+    global PERSON
+
     parser = argparse.ArgumentParser(
         description='進捗管理 Excel タスクを Outlook に自動スケジュール')
     parser.add_argument('--week', default=None,
@@ -406,15 +460,40 @@ def main():
                         help='実際に Outlook を操作する（省略=dry-run）')
     parser.add_argument('--clear', action='store_true',
                         help='自動登録タスクを削除してから再スケジュール（--execute と組み合わせ可）')
-    parser.add_argument('--file', default=EXCEL_PATH,
-                        help='Excel ファイルパス (--source excel の時のみ使用)')
+    parser.add_argument('--file', default='',
+                        help='Excel ファイルパス (--source excel の時のみ使用。'
+                             '省略時: tools/.user_config.json の task_excel_path)')
     parser.add_argument('--source', choices=['excel', 'web'], default='web',
                         help='タスクの取得元: web=manage_exp_progress(露出制御業務進捗管理, '
                              'http://10.41.55.204:3100/)のtasks.jsonから読み込み(デフォルト) / '
                              'excel=旧進捗管理Excelを直接読み込み')
-    parser.add_argument('--json', default=JSON_PATH,
-                        help='tasks.json パス (--source web の時のみ使用)')
+    parser.add_argument('--json', default='',
+                        help='tasks.json のローカルパス (--source web かつ --url 未指定の時のみ使用。'
+                             '省略時: tools/.user_config.json の task_json_path、'
+                             'それも無ければリポジトリ相対の manage_exp_progress/app/data/tasks.json)')
+    parser.add_argument('--url', default='',
+                        help='manage_exp_progress の GET /api/tasks のURL (--source web の時のみ使用)。'
+                             '指定するとローカルファイル(--json)の代わりにHTTP経由でタスクを取得する。'
+                             'OneDrive同期でtasks.jsonにローカルアクセスできない配布先の人向け '
+                             '(例: http://10.41.55.204:3100/api/tasks)。'
+                             '省略時: tools/.user_config.json の task_json_url')
+    parser.add_argument('--person', default='',
+                        help='担当者フィルタ文字列（省略時: tools/.user_config.json の task_owner、'
+                             'それも無ければ既定値「小林」）')
+    parser.add_argument('--save-person', action='store_true',
+                        help='--person で指定した値を tools/.user_config.json に保存し、'
+                             '次回から --person 省略可能にする')
     args = parser.parse_args()
+
+    # ── 個人設定の解決: コマンドライン引数 > tools/.user_config.json > ハードコード既定値 ──
+    user_cfg = _load_user_config()
+    PERSON = args.person or user_cfg.get('task_owner') or PERSON
+    excel_path = args.file or user_cfg.get('task_excel_path') or _LEGACY_EXCEL_PATH
+    json_path = args.json or user_cfg.get('task_json_path') or str(DEFAULT_JSON_PATH)
+    task_url = args.url or user_cfg.get('task_json_url') or ''
+
+    if args.save_person and args.person:
+        _save_user_config(task_owner=args.person)
 
     dry_run = not args.execute
 
@@ -429,19 +508,26 @@ def main():
 
     week_end = week_start + timedelta(days=4)
 
+    if args.source == 'web':
+        source_label = (f'manage_exp_progress (HTTP: {task_url})' if task_url
+                        else f'manage_exp_progress (tasks.json: {json_path})')
+    else:
+        source_label = f'進捗管理Excel（直接: {excel_path}）'
     print(f'[INFO] モード      : {"dry-run（確認のみ）" if dry_run else "EXECUTE（Outlook 操作）"}')
-    print(f'[INFO] データ取得元  : {"manage_exp_progress (tasks.json / http://10.41.55.204:3100/)" if args.source == "web" else "進捗管理Excel（直接）"}')
+    print(f'[INFO] データ取得元  : {source_label}')
+    print(f'[INFO] 担当者フィルタ: {PERSON}')
     print(f'[INFO] 対象週      : {week_start.strftime("%Y-%m-%d")} (月) ～ {week_end.strftime("%Y-%m-%d")} (金)')
     print()
 
     # ── タスク読み込み ──
     if args.source == 'web':
-        tasks = load_tasks_from_json(args.json)
+        tasks = load_tasks_from_url(task_url) if task_url else load_tasks_from_json(json_path)
     else:
-        tasks = load_tasks(args.file)
+        tasks = load_tasks(excel_path)
     if not tasks:
-        print('[WARN] タスクなし（担当者=小林 かつ 状況≠空白/済 かつ 工数≠0）')
+        print(f'[WARN] タスクなし（担当者={PERSON} かつ 状況≠空白/済 かつ 工数≠0）')
         return
+
 
     total_h = sum(t['duration_h'] for t in tasks)
     print(f'[INFO] タスク {len(tasks)} 件（合計 {total_h:.1f}h）')
