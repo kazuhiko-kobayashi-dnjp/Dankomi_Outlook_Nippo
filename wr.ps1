@@ -14,6 +14,11 @@
 #   .\wr.ps1 -Auth                     # トークン切れ時の再認証
 #   .\wr.ps1 -Summarize -TaskWeb       # 業務進捗表をExcelの代わりにmanage_exp_progressのtasks.jsonから読む
 #
+# ※すでに一度実行済みで、後からAI要約だけ付けたいとき(Teamsログの再取得は遷いためスキップ):
+#   .\wr.ps1                           # 1回目: 事前収集(何も付けなくても自動でキャッシュ保存される)
+#   .\wr.ps1 -FromCache -Summarize     # 2回目以降: キャッシュを使って再収集なしでAI要約だけ実行(高速)
+#   .\wr.ps1 -FromCache -Prompt        # 同様にプロンプトのみもキャッシュから高速生成可能
+#
 # 月曜日に先週分を取得したいとき:
 #   .\wr.ps1 -Days 7 -Summarize        # 月曜朝に実行 → 先週月〜日をカバー
 #
@@ -26,6 +31,7 @@
 #
 # Output: output\weekly_report_YYYYMMDD_HHMM.md
 #         output\summary_prompt_YYYYMMDD_HHMM.txt  (-Prompt 時)
+#         output\.records_cache.json  (毎回自動上書き保存、-FromCacheで次回再利用)
 
 param(
     [int]    $Days          = 7,
@@ -39,6 +45,7 @@ param(
     [switch] $SaveKey,              # ApiKey を tools\.gh_models_token に保存
     [string] $Model        = "",    # モデル名（省略時: gpt-4o-mini）
     [switch] $Auth,                 # 再認証（Device Code Flow）
+    [switch] $FromCache,            # 直前の収集結果(output\.records_cache.json)を再利用し、Graph API再収集をスキップ
     [string] $NippoDir    = "",     # 日報ディレクトリ（省略時: 自動検出）
     [string] $TaskExcel   = "",     # 業務進捗Excelパス（省略時: tools\.user_config.json の task_excel_path）
     [switch] $TaskWeb,               # 業務進捗表の取得元をExcelの代わりにmanage_exp_progressのtasks.jsonにする
@@ -66,6 +73,7 @@ if ($ApiKey)         { $a += '--api-key'; $a += $ApiKey }
 if ($SaveKey)        { $a += '--save-key' }
 if ($Model)          { $a += '--model'; $a += $Model }
 if ($Auth)           { $a += '--device-code' }
+if ($FromCache)      { $a += '--from-cache' }
 if ($NippoDir)       { $a += '--nippo-dir'; $a += $NippoDir }
 if ($TaskExcel)      { $a += '--task-excel'; $a += $TaskExcel }
 if ($TaskWeb)        { $a += '--task-source'; $a += 'web' }

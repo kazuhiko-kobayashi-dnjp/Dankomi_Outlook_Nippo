@@ -111,6 +111,35 @@ def _save_user_config(**updates):
     _USER_CONFIG_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[INFO] 個人設定を保存しました: {_USER_CONFIG_FILE}", flush=True)
 
+# ── 収集済みメッセージのキャッシュ（Graph API再取得なしで -Summarize を後から実行するため） ──
+_RECORDS_CACHE_FILE = Path(__file__).parent.parent / "output" / ".records_cache.json"
+
+def _save_records_cache(records: list[dict], days: int, me_name: str, me_id: str, since: datetime):
+    """収集したrecords一式をJSONでキャッシュ保存する（dtはISO文字列化）。"""
+    try:
+        _RECORDS_CACHE_FILE.parent.mkdir(exist_ok=True)
+        payload = {
+            "days": days,
+            "me_name": me_name,
+            "me_id": me_id,
+            "since": since.isoformat(),
+            "saved_at": datetime.now(JST).isoformat(),
+            "records": [
+                {**{k: v for k, v in r.items() if k != "dt"}, "dt": r["dt"].isoformat()}
+                for r in records
+            ],
+        }
+        _RECORDS_CACHE_FILE.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    except Exception as e:
+        print(f"[WARN] 収集結果のキャッシュ保存に失敗しました: {e}", flush=True)
+
+def _load_records_cache(path: Path = _RECORDS_CACHE_FILE) -> dict:
+    """キャッシュされたrecords一式を読み込む（dtはdatetimeに復元）。無ければ例外送出。"""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    for r in data["records"]:
+        r["dt"] = datetime.fromisoformat(r["dt"])
+    return data
+
 # ── 設定 ──────────────────────────────────────────────────────────────
 AUTHORITY    = "https://login.microsoftonline.com/69405920-b673-4f7c-8845-e124e9d08af2"
 CLIENT_ID    = "d3590ed6-52b3-4102-aeff-aad2292ab01c"   # Microsoft Office (1st party)
@@ -587,8 +616,13 @@ def collect_channel_messages(
 
 # ── 週報レポート生成 ──────────────────────────────────────────────────
 def build_report(records: list[dict], me_name: str, days: int,
-                 ai_summary: str = "") -> str:
+                 ai_summary: str = "", nippo_text: str = "") -> str:
     if not records:
+        if nippo_text.strip():
+            return (
+                "（対象期間中に該当メッセージが見つかりませんでした）\n\n"
+                "## 日報（業務実績抜粋）\n\n" + nippo_text + "\n"
+            )
         return "（対象期間中に該当メッセージが見つかりませんでした）\n"
 
     # 日付順にソート
@@ -605,6 +639,15 @@ def build_report(records: list[dict], me_name: str, days: int,
     lines.append(f"> 分析対象: {me_name} が発信 or メンションされたメッセージ")
     lines.append(f"> 統計: 総件数 {len(records)} 件（発信 {sent_n} / 被メンション {mntnd_n}）  生成: {today.strftime('%Y-%m-%d %H:%M')} JST")
     lines.append("")
+
+    # ─ 日報（業務実績抜粋） ─
+    if nippo_text.strip():
+        lines.append("## 日報（業務実績抜粋）")
+        lines.append("")
+        lines.append(nippo_text)
+        lines.append("")
+        lines.append("---")
+        lines.append("")
 
     # AI 要約がある場合はそれのみを出力（ログ羅列はスキップ）
     if ai_summary:
@@ -1089,6 +1132,9 @@ def main():
     ap.add_argument("--task-json",   type=str, default="",    help="manage_exp_progressのtasks.jsonのパス（--task-source web の時のみ使用。省略時: tools/.user_config.jsonのtask_json_path、それも無ければ manage_exp_progress/app/data/tasks.json）")
     ap.add_argument("--task-owner",  type=str, default="",    help="業務進捗表のフィルタ担当者名（省略時: tools/.user_config.jsonのtask_owner）")
     ap.add_argument("--save-task-owner", action="store_true", help="--task-owner で指定した値を tools/.user_config.json に保存して次回から省略可能にする")
+    ap.add_argument("--from-cache",  action="store_true",
+                     help="直前に収集したTeamsメッセージ(output/.records_cache.json)を再利用し、"
+                          "Graph API再収集をスキップする（--summarize/--prompt-only を後から付けたい時に高速化）")
     args = ap.parse_args()
 
     _user_cfg = _load_user_config()
@@ -1108,49 +1154,66 @@ def main():
         print(f"[INFO] teams-allow を保存: {_TEAMS_ALLOW_FILE}", flush=True)
 
     auth_mode = "device_code" if args.device_code else "interactive"
-    since = datetime.now(JST) - timedelta(days=args.days)
-    print(f"[INFO] 集計期間: {since.strftime('%Y-%m-%d')} ～ 本日（JST）", flush=True)
 
-    token = get_token(auth_mode)
-    gc = GraphClient(token)
+    if args.from_cache:
+        # ── キャッシュ再利用: Graph API認証・再収集をスキップ ──
+        if not _RECORDS_CACHE_FILE.exists():
+            print(f"[ERROR] キャッシュファイルが見つかりません: {_RECORDS_CACHE_FILE}\n"
+                  f"        先に --from-cache 無しで一度実行してください。", flush=True)
+            sys.exit(1)
+        cache = _load_records_cache()
+        records  = cache["records"]
+        me_name  = cache["me_name"]
+        since    = datetime.fromisoformat(cache["since"])
+        args.days = cache["days"]  # 集計期間はキャッシュ側に合わせる
+        print(f"[INFO] キャッシュを再利用します（{cache['saved_at']} 時点収集、"
+              f"{cache['days']}日間、{len(records)}件）: {_RECORDS_CACHE_FILE}", flush=True)
+    else:
+        since = datetime.now(JST) - timedelta(days=args.days)
+        print(f"[INFO] 集計期間: {since.strftime('%Y-%m-%d')} ～ 本日（JST）", flush=True)
 
-    # --list-teams: 一覧表示して終了
-    if args.list_teams:
-        list_teams(gc)
-        sys.exit(0)
+        token = get_token(auth_mode)
+        gc = GraphClient(token)
 
-    # 自分のユーザー情報を取得
-    me = gc.get("/me", params={"$select": "id,displayName,userPrincipalName"})
-    if not me or not me.get("id"):
-        print("[ERROR] /me API にアクセスできません", flush=True)
-        sys.exit(1)
-    me_id   = me["id"]
-    me_name = me.get("displayName") or me.get("userPrincipalName", "")
-    print(f"[INFO] ユーザー: {me_name} (id={me_id})", flush=True)
+        # --list-teams: 一覧表示して終了
+        if args.list_teams:
+            list_teams(gc)
+            sys.exit(0)
 
-    # チャットメッセージ収集
-    records = collect_chat_messages(gc, me_id, since)
+        # 自分のユーザー情報を取得
+        me = gc.get("/me", params={"$select": "id,displayName,userPrincipalName"})
+        if not me or not me.get("id"):
+            print("[ERROR] /me API にアクセスできません", flush=True)
+            sys.exit(1)
+        me_id   = me["id"]
+        me_name = me.get("displayName") or me.get("userPrincipalName", "")
+        print(f"[INFO] ユーザー: {me_name} (id={me_id})", flush=True)
 
-    # チャンネルメッセージ収集
-    teams_allow = _load_teams_allow(args.teams_allow)
-    if not args.no_channels:
-        records += collect_channel_messages(gc, me_id, since, teams_allow=teams_allow)
+        # チャットメッセージ収集
+        records = collect_chat_messages(gc, me_id, since)
 
-    print(f"\n[INFO] 収集完了: {len(records)} 件", flush=True)
+        # チャンネルメッセージ収集
+        teams_allow = _load_teams_allow(args.teams_allow)
+        if not args.no_channels:
+            records += collect_channel_messages(gc, me_id, since, teams_allow=teams_allow)
 
-    # ─ 日報読み込み ─
+        print(f"\n[INFO] 収集完了: {len(records)} 件", flush=True)
+
+        # 次回 --from-cache で再利用できるようキャッシュ保存
+        _save_records_cache(records, args.days, me_name, me_id, since)
+
+    # ─ 日報読み込み ─（週報本文・AI要約プロンプトの両方で使うため常に読み込む）
     nippo_text = ""
-    if args.summarize or args.prompt_only:
-        _nippo_year = since.strftime("%Y")
-        _nippo_base = (
-            Path(args.nippo_dir) if args.nippo_dir
-            else Path(__file__).parent.parent / "日報" / _nippo_year
-        )
-        if _nippo_base.exists():
-            nippo_text = load_nippo_text(_nippo_base, since, datetime.now(JST))
-            print(f"[INFO] 日報: {len(nippo_text)} 文字 読み込み完了", flush=True)
-        else:
-            print(f"[INFO] 日報ディレクトリが見つかりません: {_nippo_base}", flush=True)
+    _nippo_year = since.strftime("%Y")
+    _nippo_base = (
+        Path(args.nippo_dir) if args.nippo_dir
+        else Path(__file__).parent.parent / "日報" / _nippo_year
+    )
+    if _nippo_base.exists():
+        nippo_text = load_nippo_text(_nippo_base, since, datetime.now(JST))
+        print(f"[INFO] 日報: {len(nippo_text)} 文字 読み込み完了", flush=True)
+    else:
+        print(f"[INFO] 日報ディレクトリが見つかりません: {_nippo_base}", flush=True)
 
     # ─ 業務進捗表読み込み (Excel 直接 or manage_exp_progressのtasks.json) ─
     task_rows: list[dict] | None = None
@@ -1194,7 +1257,7 @@ def main():
             print(f"\n[INFO] 要約プロンプトを保存しました: {prompt_path.name}", flush=True)
 
     # 週報生成（AI要約がある場合はログ羅列をスキップ）
-    report = build_report(records, me_name, args.days, ai_summary=ai_summary or "")
+    report = build_report(records, me_name, args.days, ai_summary=ai_summary or "", nippo_text=nippo_text)
 
     # 出力先決定
     out_dir = Path(__file__).parent.parent / "output"
