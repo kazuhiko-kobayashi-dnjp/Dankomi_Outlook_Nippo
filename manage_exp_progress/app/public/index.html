@@ -82,6 +82,7 @@
   }
   .rte:focus { outline:none; border-color:var(--navy2); }
   .rte img { max-width:100%; height:auto; display:block; margin:6px 0; border-radius:4px; border:1px solid var(--border); }
+  .rte.ctrl-down a { cursor:pointer; }
   .modal .headfields { display:grid; grid-template-columns:repeat(6, 1fr); gap:10px; align-items:end; }
   .modal .row2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   .modal .plan-recent { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:14px; }
@@ -844,6 +845,32 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && lightboxOverlay.classList.contains('show')) {
     lightboxOverlay.classList.remove('show');
   }
+});
+
+// リンク(<a>)はcontenteditable内では通常クリックがカーソル配置に使われるため、
+// Ctrl/Cmd+クリック時だけ別タブで開く(Wordのハイパーリンクと同じ操作感)。
+// Ctrl押下中はカーソルを指マークに変え、実際に開けることを視覚的に示す。
+document.querySelectorAll('.rte').forEach(field => {
+  field.addEventListener('click', (e) => {
+    const a = e.target.closest('a');
+    if (a && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      window.open(a.href, '_blank', 'noopener');
+    }
+  });
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Control' || e.key === 'Meta') {
+    document.querySelectorAll('.rte').forEach(f => f.classList.add('ctrl-down'));
+  }
+});
+document.addEventListener('keyup', (e) => {
+  if (e.key === 'Control' || e.key === 'Meta') {
+    document.querySelectorAll('.rte').forEach(f => f.classList.remove('ctrl-down'));
+  }
+});
+window.addEventListener('blur', () => {
+  document.querySelectorAll('.rte').forEach(f => f.classList.remove('ctrl-down'));
 });
 
 // リッチテキストツールバー（太字・文字色など）の初期化
