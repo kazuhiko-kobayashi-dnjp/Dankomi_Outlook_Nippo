@@ -140,6 +140,12 @@
   <select id="fProject"><option value="">全プロジェクト</option></select>
   <select id="fPerson"><option value="">全担当者</option></select>
   <div class="status-toggles" id="fStatus"></div>
+  <select id="fGanttView" class="view-hidden" title="ロードマップの表示方法">
+    <option value="task">タスク別(個別)</option>
+    <option value="project">プロジェクト別</option>
+    <option value="category">機能別</option>
+    <option value="person">担当者別</option>
+  </select>
   <select id="fGanttMonths" class="view-hidden" title="ロードマップの表示期間">
     <option value="1">1ヶ月表示</option>
     <option value="2">2ヶ月表示</option>
@@ -177,20 +183,20 @@
         <strong>工数ヒートマップ (1週間40h基準):</strong>
       </div>
       <div class="gantt-legend-item">
-        <div class="gantt-legend-box" style="background:#1e96c8;"></div>
-        <span>少(0〜10h)</span>
+        <div class="gantt-legend-box" style="background:#7eb4d2;"></div>
+        <span>少(0〜5h)</span>
       </div>
       <div class="gantt-legend-item">
-        <div class="gantt-legend-box" style="background:#7ea050;"></div>
-        <span>中(10〜20h)</span>
+        <div class="gantt-legend-box" style="background:#96a65f;"></div>
+        <span>中(5〜10h)</span>
       </div>
       <div class="gantt-legend-item">
         <div class="gantt-legend-box" style="background:#d07832;"></div>
-        <span>大(20〜30h)</span>
+        <span>大(10〜20h)</span>
       </div>
       <div class="gantt-legend-item">
         <div class="gantt-legend-box" style="background:#e61e1e;"></div>
-        <span>超大(30h+)</span>
+        <span>超大(20h+)</span>
       </div>
     </div>
     <div id="ganttGrid"></div>
@@ -525,7 +531,12 @@ let GANTT_MONTHS = 3;
 function manhourHeatColor(manhour) {
   if (!manhour || manhour <= 0) return '#e0e0e0';
   const val = Math.min(manhour, 40);
-  const ratio = val / 40;
+  let ratio;
+  if (val <= 10) {
+    ratio = val / 10 * 0.5;
+  } else {
+    ratio = 0.5 + ((val - 10) / 30) * 0.5;
+  }
   const r = Math.round(30 + ratio * 200);
   const g = Math.round(150 - ratio * 120);
   const b = Math.round(200 - ratio * 150);
@@ -563,18 +574,21 @@ function ganttColumns() {
 }
 
 function renderGantt(list) {
+  const viewMode = document.getElementById('fGanttView').value;
   const cols = ganttColumns();
-  const sortedTasks = [...list].sort((a, b) => {
-    const aLabel = getTaskRowLabel(a);
-    const bLabel = getTaskRowLabel(b);
-    return aLabel.localeCompare(bLabel, 'ja');
-  });
   const gridCols = `420px repeat(${cols.length}, 1fr)`;
 
   function getTaskRowLabel(t) {
     const recentText = htmlToPlainText(t.recent) || '';
     const firstLine = recentText.split('\n')[0] || '(直近の動き未設定)';
     return firstLine.trim();
+  }
+
+  function getGroupLabel(t, mode) {
+    if (mode === 'project') return t.project || '(プロジェクト未設定)';
+    if (mode === 'category') return t.category || '(機能未設定)';
+    if (mode === 'person') return t.person || '(担当者未設定)';
+    return getTaskRowLabel(t);
   }
 
   function getTaskDateRange(deadline) {
@@ -632,8 +646,12 @@ function renderGantt(list) {
   if (currentMonthSpan.count > 0) monthSpans.push(currentMonthSpan);
   if (currentWeekSpan.count > 0) weekSpans.push(currentWeekSpan);
 
+  const headerLabel = viewMode === 'task' ? '直近の動き (1行目)' :
+                      viewMode === 'project' ? 'プロジェクト' :
+                      viewMode === 'category' ? '機能' : '担当者';
+
   let html = `<div class="gantt-header" style="grid-template-columns:${gridCols}; display:grid;">`;
-  html += `<div class="gantt-hcell gantt-rowlabel" style="grid-row:1/4; grid-column:1;">直近の動き (1行目)</div>`;
+  html += `<div class="gantt-hcell gantt-rowlabel" style="grid-row:1/4; grid-column:1;">${headerLabel}</div>`;
   monthSpans.forEach(span => {
     html += `<div class="gantt-hcell month" style="grid-row:1; grid-column:${span.start + 2}/${span.start + 2 + span.count};">${span.label}</div>`;
   });
@@ -649,33 +667,80 @@ function renderGantt(list) {
   });
   html += `</div>`;
 
-  sortedTasks.forEach(task => {
-    const rowLabel = getTaskRowLabel(task);
-    const taskDates = getTaskDateRange(task.deadline);
-    const isDeadlineDay = (dateKey) => dateKey === task.deadline;
-    const isTaskDate = (dateKey) => taskDates.includes(dateKey);
+  if (viewMode === 'task') {
+    const sortedTasks = [...list].sort((a, b) => getTaskRowLabel(a).localeCompare(getTaskRowLabel(b), 'ja'));
+    sortedTasks.forEach(task => {
+      const rowLabel = getTaskRowLabel(task);
+      const taskDates = getTaskDateRange(task.deadline);
+      const isDeadlineDay = (dateKey) => dateKey === task.deadline;
+      const isTaskDate = (dateKey) => taskDates.includes(dateKey);
 
-    html += `<div class="gantt-row" style="grid-template-columns:${gridCols};">`;
-    html += `<div class="gantt-cell gantt-rowlabel" title="${escapeHtml(rowLabel)}">${escapeHtml(rowLabel)}</div>`;
-    cols.forEach((c, idx) => {
-      const isWeekStart = idx === 0 || (cols[idx - 1].weekNum !== c.weekNum);
-      const weekStartClass = isWeekStart ? ' weekstart' : '';
-      const cellClass = c.isWeekend ? `gantt-cell weekend${weekStartClass}` : `gantt-cell${weekStartClass}`;
+      html += `<div class="gantt-row" style="grid-template-columns:${gridCols};">`;
+      html += `<div class="gantt-cell gantt-rowlabel" title="${escapeHtml(rowLabel)}" data-row="${task.row}" style="cursor:pointer;">${escapeHtml(rowLabel)}</div>`;
+      cols.forEach((c, idx) => {
+        const isWeekStart = idx === 0 || (cols[idx - 1].weekNum !== c.weekNum);
+        const weekStartClass = isWeekStart ? ' weekstart' : '';
+        const cellClass = c.isWeekend ? `gantt-cell weekend${weekStartClass}` : `gantt-cell${weekStartClass}`;
 
-      if (isTaskDate(c.key)) {
-        const color = manhourHeatColor(task.manhours);
-        if (isDeadlineDay(c.key)) {
-          html += `<div class="${cellClass}">${chipHtml(task)}</div>`;
+        if (isTaskDate(c.key)) {
+          const color = manhourHeatColor(task.manhours);
+          if (isDeadlineDay(c.key)) {
+            html += `<div class="${cellClass}">${chipHtml(task)}</div>`;
+          } else {
+            const tip = `${task.id} / ${task.project || ''}\n期限:${task.deadline || '未設定'} / 工数:${task.manhours || '未設定'}`;
+            html += `<div class="${cellClass}" style="background:${color}; opacity:0.6;" title="${escapeHtml(tip)}" data-row="${task.row}"></div>`;
+          }
         } else {
-          const tip = `${task.id} / ${task.project || ''}\n期限:${task.deadline || '未設定'} / 工数:${task.manhours || '未設定'}`;
-          html += `<div class="${cellClass}" style="background:${color}; opacity:0.6;" title="${escapeHtml(tip)}" data-row="${task.row}"></div>`;
+          html += `<div class="${cellClass}"></div>`;
         }
-      } else {
-        html += `<div class="${cellClass}"></div>`;
-      }
+      });
+      html += `</div>`;
     });
-    html += `</div>`;
-  });
+  } else {
+    const groups = new Map();
+    list.forEach(t => {
+      const key = getGroupLabel(t, viewMode);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(t);
+    });
+    const groupNames = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b, 'ja'));
+
+    groupNames.forEach(name => {
+      const tasks = groups.get(name);
+      html += `<div class="gantt-row" style="grid-template-columns:${gridCols};">`;
+      html += `<div class="gantt-cell gantt-rowlabel" title="${escapeHtml(name)}">${escapeHtml(name)} <span class="gantt-count">(${tasks.length})</span></div>`;
+      cols.forEach((c, idx) => {
+        const inCol = tasks.filter(t => {
+          const dates = getTaskDateRange(t.deadline);
+          return dates.includes(c.key) || t.deadline === c.key;
+        });
+        const isWeekStart = idx === 0 || (cols[idx - 1].weekNum !== c.weekNum);
+        const weekStartClass = isWeekStart ? ' weekstart' : '';
+        const cellClass = c.isWeekend ? `gantt-cell weekend${weekStartClass}` : `gantt-cell${weekStartClass}`;
+
+        if (inCol.length === 0) {
+          html += `<div class="${cellClass}"></div>`;
+        } else if (inCol.length === 1) {
+          const t = inCol[0];
+          const dates = getTaskDateRange(t.deadline);
+          const isDeadline = c.key === t.deadline;
+          const color = manhourHeatColor(t.manhours);
+          if (isDeadline) {
+            html += `<div class="${cellClass}">${chipHtml(t)}</div>`;
+          } else {
+            const tip = `${t.id} / ${t.project || ''}\n期限:${t.deadline || '未設定'} / 工数:${t.manhours || '未設定'}`;
+            html += `<div class="${cellClass}" style="background:${color}; opacity:0.6;" title="${escapeHtml(tip)}" data-row="${t.row}"></div>`;
+          }
+        } else {
+          const totalManhours = inCol.reduce((s,t)=>s+(t.manhours||0),0);
+          const tip = inCol.map(t => `${t.id} (工数:${t.manhours||'?'})`).join('\n');
+          const firstRowAttr = inCol.map(t => t.row).join(',');
+          html += `<div class="${cellClass} gantt-multi" title="${escapeHtml(tip)}" style="background:${manhourHeatColor(totalManhours)};" data-rows="${firstRowAttr}">${inCol.length}件</div>`;
+        }
+      });
+      html += `</div>`;
+    });
+  }
 
   const wrap = document.getElementById('ganttGrid');
   wrap.innerHTML = html || '<p style="padding:10px;color:#888;">該当タスクがありません</p>';
@@ -694,12 +759,16 @@ function renderGantt(list) {
       cell.addEventListener('click', () => openModal(Number(cell.dataset.row)));
     }
   });
+  wrap.querySelectorAll('.gantt-rowlabel[data-row]').forEach(label => {
+    label.addEventListener('click', () => openModal(Number(label.dataset.row)));
+  });
 }
 
 function toggleView() {
   currentView = currentView === 'table' ? 'gantt' : 'table';
   document.getElementById('viewTable').classList.toggle('view-hidden', currentView !== 'table');
   document.getElementById('viewGantt').classList.toggle('view-hidden', currentView !== 'gantt');
+  document.getElementById('fGanttView').classList.toggle('view-hidden', currentView !== 'gantt');
   document.getElementById('fGanttMonths').classList.toggle('view-hidden', currentView !== 'gantt');
   document.getElementById('btnToggleView').textContent = currentView === 'table' ? '🗓 ロードマップ表示' : '📋 一覧表示';
   render();
@@ -1022,6 +1091,7 @@ document.getElementById('fProject').addEventListener('change', render);
 document.getElementById('fPerson').addEventListener('change', render);
 document.getElementById('fText').addEventListener('input', render);
 document.getElementById('btnToggleView').addEventListener('click', toggleView);
+document.getElementById('fGanttView').addEventListener('change', render);
 document.getElementById('fGanttMonths').addEventListener('change', (e) => {
   GANTT_MONTHS = parseInt(e.target.value, 10) || 3;
   render();
