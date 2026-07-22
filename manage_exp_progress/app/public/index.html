@@ -569,12 +569,24 @@ function renderGantt(list) {
     const bLabel = getTaskRowLabel(b);
     return aLabel.localeCompare(bLabel, 'ja');
   });
-  const gridCols = `280px repeat(${cols.length}, 20px)`;
+  const gridCols = `420px repeat(${cols.length}, 20px)`;
 
   function getTaskRowLabel(t) {
     const recentText = htmlToPlainText(t.recent) || '';
     const firstLine = recentText.split('\n')[0] || '(直近の動き未設定)';
-    return firstLine.trim().slice(0, 60);
+    return firstLine.trim();
+  }
+
+  function getTaskDateRange(deadline) {
+    if (!deadline) return [];
+    const end = new Date(deadline);
+    const start = new Date(end);
+    start.setDate(end.getDate() - 6);
+    const range = [];
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      range.push(d.toISOString().split('T')[0]);
+    }
+    return range;
   }
 
   function chipHtml(t) {
@@ -639,15 +651,25 @@ function renderGantt(list) {
 
   sortedTasks.forEach(task => {
     const rowLabel = getTaskRowLabel(task);
+    const taskDates = getTaskDateRange(task.deadline);
+    const isDeadlineDay = (dateKey) => dateKey === task.deadline;
+    const isTaskDate = (dateKey) => taskDates.includes(dateKey);
+
     html += `<div class="gantt-row" style="grid-template-columns:${gridCols};">`;
     html += `<div class="gantt-cell gantt-rowlabel" title="${escapeHtml(rowLabel)}">${escapeHtml(rowLabel)}</div>`;
     cols.forEach((c, idx) => {
-      const isThisTask = task.deadline === c.key;
       const isWeekStart = idx === 0 || (cols[idx - 1].weekNum !== c.weekNum);
       const weekStartClass = isWeekStart ? ' weekstart' : '';
       const cellClass = c.isWeekend ? `gantt-cell weekend${weekStartClass}` : `gantt-cell${weekStartClass}`;
-      if (isThisTask) {
-        html += `<div class="${cellClass}">${chipHtml(task)}</div>`;
+
+      if (isTaskDate(c.key)) {
+        const color = manhourHeatColor(task.manhours);
+        if (isDeadlineDay(c.key)) {
+          html += `<div class="${cellClass}">${chipHtml(task)}</div>`;
+        } else {
+          const tip = `${task.id} / ${task.project || ''}\n期限:${task.deadline || '未設定'} / 工数:${task.manhours || '未設定'}`;
+          html += `<div class="${cellClass}" style="background:${color}; opacity:0.6;" title="${escapeHtml(tip)}" data-row="${task.row}"></div>`;
+        }
       } else {
         html += `<div class="${cellClass}"></div>`;
       }
@@ -665,6 +687,12 @@ function renderGantt(list) {
       const rows = multi.dataset.rows.split(',').map(Number);
       if (rows.length > 0) openModal(rows[0]);
     });
+  });
+  wrap.querySelectorAll('.gantt-cell[data-row]').forEach(cell => {
+    if (!cell.classList.contains('gantt-chip') && !cell.classList.contains('gantt-multi')) {
+      cell.style.cursor = 'pointer';
+      cell.addEventListener('click', () => openModal(Number(cell.dataset.row)));
+    }
   });
 }
 
