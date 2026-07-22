@@ -569,7 +569,7 @@ function renderGantt(list) {
     const bLabel = getTaskRowLabel(b);
     return aLabel.localeCompare(bLabel, 'ja');
   });
-  const gridCols = `420px repeat(${cols.length}, 20px)`;
+  const gridCols = `420px repeat(${cols.length}, 1fr)`;
 
   function getTaskRowLabel(t) {
     const recentText = htmlToPlainText(t.recent) || '';
