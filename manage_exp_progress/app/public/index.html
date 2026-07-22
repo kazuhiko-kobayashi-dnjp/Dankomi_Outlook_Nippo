@@ -174,23 +174,23 @@
   <div class="gantt-wrap">
     <div class="gantt-legend">
       <div class="gantt-legend-item">
-        <strong>工数ヒートマップ:</strong>
+        <strong>工数ヒートマップ (1週間40h基準):</strong>
       </div>
       <div class="gantt-legend-item">
         <div class="gantt-legend-box" style="background:#1e96c8;"></div>
-        <span>少(0〜20)</span>
+        <span>少(0〜10h)</span>
       </div>
       <div class="gantt-legend-item">
         <div class="gantt-legend-box" style="background:#7ea050;"></div>
-        <span>中(20〜50)</span>
+        <span>中(10〜20h)</span>
       </div>
       <div class="gantt-legend-item">
         <div class="gantt-legend-box" style="background:#d07832;"></div>
-        <span>大(50〜80)</span>
+        <span>大(20〜30h)</span>
       </div>
       <div class="gantt-legend-item">
         <div class="gantt-legend-box" style="background:#e61e1e;"></div>
-        <span>超大(80+)</span>
+        <span>超大(30h+)</span>
       </div>
     </div>
     <div id="ganttGrid"></div>
@@ -524,8 +524,8 @@ let GANTT_MONTHS = 3;
 
 function manhourHeatColor(manhour) {
   if (!manhour || manhour <= 0) return '#e0e0e0';
-  const val = Math.min(manhour, 100);
-  const ratio = val / 100;
+  const val = Math.min(manhour, 40);
+  const ratio = val / 40;
   const r = Math.round(30 + ratio * 200);
   const g = Math.round(150 - ratio * 120);
   const b = Math.round(200 - ratio * 150);
