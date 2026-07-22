@@ -98,23 +98,27 @@
 
   .view-hidden { display:none !important; }
   .gantt-wrap { padding: 10px 18px; overflow-x:auto; }
-  .gantt-header, .gantt-row { display:grid; gap:4px; align-items:stretch; }
-  .gantt-hcell { background:var(--navy2); color:#fff; font-size:11px; padding:6px 4px; text-align:center; border-radius:4px; position:sticky; top:88px; z-index:3; }
-  .gantt-rowlabel { text-align:left; padding-left:8px; }
-  .gantt-header .gantt-rowlabel { background:var(--navy); }
-  .gantt-row { border-bottom:1px solid var(--border); padding:4px 0; }
-  .gantt-cell { min-height:32px; padding:3px; font-size:11px; background:#fbfbfd; border:1px solid #f0f0f0; border-radius:3px; display:flex; flex-direction:column; gap:2px; }
-  .gantt-cell.gantt-rowlabel { background:#fff; border:none; justify-content:flex-start; padding-top:6px; font-size:12px; font-weight:bold; color:var(--navy); position:sticky; left:0; z-index:2; }
+  .gantt-legend { display:flex; gap:16px; margin-bottom:12px; padding:8px 12px; background:#f9f9fb; border:1px solid var(--border); border-radius:6px; font-size:11px; align-items:center; }
+  .gantt-legend-item { display:flex; align-items:center; gap:6px; }
+  .gantt-legend-box { width:24px; height:16px; border-radius:3px; border:1px solid #ccc; }
+  .gantt-header, .gantt-row { display:grid; gap:1px; align-items:stretch; }
+  .gantt-hcell { background:var(--navy2); color:#fff; font-size:9px; padding:4px 2px; text-align:center; border-radius:2px; line-height:1.2; border:1px solid #1a237e; }
+  .gantt-hcell.month { background:var(--navy); font-size:11px; font-weight:bold; padding:6px 2px; }
+  .gantt-hcell.week { background:#3949ab; font-size:10px; }
+  .gantt-hcell.day { font-size:9px; }
+  .gantt-hcell.weekend { background:#5e35b1; }
+  .gantt-hcell.weekstart { border-left:3px solid var(--navy); }
+  .gantt-rowlabel { text-align:left; padding-left:8px; position:sticky; left:0; z-index:4; background:var(--navy); }
+  .gantt-row { border-bottom:1px solid var(--border); padding:1px 0; }
+  .gantt-cell { min-height:32px; padding:2px; font-size:10px; background:#fbfbfd; border:1px solid #eee; border-radius:2px; display:flex; align-items:center; justify-content:center; position:relative; }
+  .gantt-cell.gantt-rowlabel { background:#fff; border:none; justify-content:flex-start; padding:4px 8px; font-size:12px; font-weight:bold; color:var(--navy); }
+  .gantt-cell.weekend { background:#f5f5f5; }
+  .gantt-cell.weekstart { border-left:2px solid #999; }
   .gantt-count { color:#777; font-weight:normal; font-size:10px; }
-  .gantt-chip { padding:2px 5px; border-radius:3px; font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; border-left:3px solid #999; background:#f5f5f5; color:#333; }
-  .gantt-chip.deadline-overdue { border-left-color:var(--danger); background:#ffebee; color:#b71c1c; }
-  .gantt-chip.deadline-2 { border-left-color:var(--warn); background:#fff3e0; color:#e65100; }
-  .gantt-chip.deadline-7 { border-left-color:var(--soon); background:#fffde7; color:#5c4c00; }
-  .gantt-chip.deadline-ok { border-left-color:var(--ok); background:#e8f5e9; color:#1b5e20; }
-  .gantt-chip.deadline-none { border-left-color:#ccc; background:#fafafa; color:#666; }
-  .gantt-chip:hover { filter:brightness(0.95); }
-  .gantt-more { padding:2px 5px; font-size:10px; color:var(--navy2); cursor:pointer; text-decoration:underline; }
-  .gantt-extra { display:flex; flex-direction:column; gap:2px; }
+  .gantt-chip { padding:3px 5px; border-radius:2px; font-size:9px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; color:#fff; font-weight:bold; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+  .gantt-chip:hover { filter:brightness(0.85); box-shadow:0 2px 5px rgba(0,0,0,.3); }
+  .gantt-multi { font-size:13px; font-weight:bold; color:#fff; cursor:pointer; border-radius:3px; padding:4px; }
+  .gantt-multi:hover { filter:brightness(0.85); }
 </style>
 </head>
 <body>
@@ -142,9 +146,10 @@
     <option value="category">機能でグループ</option>
   </select>
   <select id="fGanttMonths" class="view-hidden" title="ロードマップの表示期間">
+    <option value="1">1ヶ月表示</option>
+    <option value="2">2ヶ月表示</option>
     <option value="3" selected>3ヶ月表示</option>
     <option value="6">6ヶ月表示</option>
-    <option value="12">12ヶ月表示</option>
   </select>
   <input type="text" id="fText" placeholder="キーワード検索(段取り/直近の動き/コメント)" style="width:260px;">
   <button class="reset" id="btnReset">条件クリア</button>
@@ -172,6 +177,27 @@
 
 <div id="viewGantt" class="view-hidden">
   <div class="gantt-wrap">
+    <div class="gantt-legend">
+      <div class="gantt-legend-item">
+        <strong>工数ヒートマップ:</strong>
+      </div>
+      <div class="gantt-legend-item">
+        <div class="gantt-legend-box" style="background:#1e96c8;"></div>
+        <span>少(0〜20)</span>
+      </div>
+      <div class="gantt-legend-item">
+        <div class="gantt-legend-box" style="background:#7ea050;"></div>
+        <span>中(20〜50)</span>
+      </div>
+      <div class="gantt-legend-item">
+        <div class="gantt-legend-box" style="background:#d07832;"></div>
+        <span>大(50〜80)</span>
+      </div>
+      <div class="gantt-legend-item">
+        <div class="gantt-legend-box" style="background:#e61e1e;"></div>
+        <span>超大(80+)</span>
+      </div>
+    </div>
     <div id="ganttGrid"></div>
   </div>
 </div>
@@ -501,27 +527,43 @@ function renderTable(list) {
 let currentView = 'table';
 let GANTT_MONTHS = 3;
 
-function bucketOf(deadline) {
-  if (!deadline) return 'none';
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const d = new Date(deadline); d.setHours(0, 0, 0, 0);
-  if (isNaN(d.getTime())) return 'none';
-  if (d < today) return 'overdue';
-  const cur = new Date(today.getFullYear(), today.getMonth(), 1);
-  const monthDiff = (d.getFullYear() - cur.getFullYear()) * 12 + (d.getMonth() - cur.getMonth());
-  if (monthDiff < GANTT_MONTHS) return `m${monthDiff}`;
-  return 'far';
+function manhourHeatColor(manhour) {
+  if (!manhour || manhour <= 0) return '#e0e0e0';
+  const val = Math.min(manhour, 100);
+  const ratio = val / 100;
+  const r = Math.round(30 + ratio * 200);
+  const g = Math.round(150 - ratio * 120);
+  const b = Math.round(200 - ratio * 150);
+  return `rgb(${r}, ${g}, ${b})`;
 }
 
 function ganttColumns() {
   const today = new Date();
-  const cols = [{ key: 'overdue', label: '期限超過' }];
-  for (let i = 0; i < GANTT_MONTHS; i++) {
-    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-    cols.push({ key: `m${i}`, label: `${d.getFullYear()}/${d.getMonth() + 1}` });
+  today.setHours(0, 0, 0, 0);
+  const cols = [];
+  const numDays = GANTT_MONTHS * 30;
+
+  for (let i = 0; i < numDays; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    const key = d.toISOString().split('T')[0];
+    const day = d.getDate();
+    const month = d.getMonth() + 1;
+    const dayName = ['日','月','火','水','木','金','土'][d.getDay()];
+    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+
+    cols.push({
+      key,
+      day,
+      month,
+      year: d.getFullYear(),
+      dayName,
+      isWeekend,
+      isMonthStart: day === 1,
+      weekNum: Math.floor(i / 7)
+    });
   }
-  cols.push({ key: 'far', label: `${GANTT_MONTHS}ヶ月超で先` });
-  cols.push({ key: 'none', label: '期限未設定' });
+
   return cols;
 }
 
@@ -535,40 +577,87 @@ function renderGantt(list) {
     groups.get(key).push(t);
   });
   const groupNames = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b, 'ja'));
-  const gridCols = `140px repeat(${cols.length}, minmax(90px, 1fr))`;
-  const CHIP_LIMIT = 6;
+  const gridCols = `180px repeat(${cols.length}, 20px)`;
 
   function chipHtml(t) {
-    const dl = deadlineInfo(t.deadline);
-    const label = `${t.status_mark || ''}${t.id} ${t.category || t.project || ''}`.trim();
+    const label = `${t.id}`;
     const planText = htmlToPlainText(t.plan) || '(なし)';
     const recentText = htmlToPlainText(t.recent) || '(なし)';
-    const tip = `${t.id} / ${t.project || ''} / ${t.person || ''} / 期限:${t.deadline || '未設定'}\n`
+    const tip = `${t.id} / ${t.project || ''} / ${t.category || ''} / ${t.person || ''}\n期限:${t.deadline || '未設定'} / 工数:${t.manhours || '未設定'}\n`
       + `【業務の段取り】\n${planText}\n\n【直近の動き】\n${recentText}`;
-    return `<div class="gantt-chip ${dl.cls}" data-row="${t.row}" title="${escapeHtml(tip)}">${escapeHtml(label)}</div>`;
+    const color = manhourHeatColor(t.manhours);
+    return `<div class="gantt-chip" data-row="${t.row}" title="${escapeHtml(tip)}" style="background:${color};">${escapeHtml(label)}</div>`;
   }
 
-  let html = `<div class="gantt-header" style="grid-template-columns:${gridCols};">`;
-  html += `<div class="gantt-hcell gantt-rowlabel">グループ</div>`;
-  html += cols.map(c => `<div class="gantt-hcell">${c.label}</div>`).join('');
+  let prevMonth = null;
+  let prevWeek = null;
+  let monthSpans = [];
+  let weekSpans = [];
+  let currentMonthSpan = { start: 0, count: 0, label: '' };
+  let currentWeekSpan = { start: 0, count: 0, label: '' };
+
+  cols.forEach((c, idx) => {
+    if (c.month !== prevMonth || c.year !== (prevMonth !== null ? cols[idx-1].year : null)) {
+      if (prevMonth !== null && currentMonthSpan.count > 0) {
+        monthSpans.push({ ...currentMonthSpan });
+      }
+      currentMonthSpan = { start: idx, count: 1, label: `${c.year}年${c.month}月` };
+      prevMonth = c.month;
+    } else {
+      currentMonthSpan.count++;
+    }
+
+    if (c.weekNum !== prevWeek) {
+      if (prevWeek !== null && currentWeekSpan.count > 0) {
+        weekSpans.push({ ...currentWeekSpan });
+      }
+      const weekStart = new Date(c.year, c.month - 1, c.day);
+      currentWeekSpan = { start: idx, count: 1, label: `${weekStart.getMonth()+1}/${weekStart.getDate()}~` };
+      prevWeek = c.weekNum;
+    } else {
+      currentWeekSpan.count++;
+    }
+  });
+
+  if (currentMonthSpan.count > 0) monthSpans.push(currentMonthSpan);
+  if (currentWeekSpan.count > 0) weekSpans.push(currentWeekSpan);
+
+  let html = `<div class="gantt-header" style="grid-template-columns:${gridCols}; display:grid;">`;
+  html += `<div class="gantt-hcell gantt-rowlabel" style="grid-row:1/4; grid-column:1;">グループ</div>`;
+  monthSpans.forEach(span => {
+    html += `<div class="gantt-hcell month" style="grid-row:1; grid-column:${span.start + 2}/${span.start + 2 + span.count};">${span.label}</div>`;
+  });
+  weekSpans.forEach((span, idx) => {
+    const weekStartClass = idx === 0 ? '' : ' weekstart';
+    html += `<div class="gantt-hcell week${weekStartClass}" style="grid-row:2; grid-column:${span.start + 2}/${span.start + 2 + span.count};">${span.label}</div>`;
+  });
+  cols.forEach((c, idx) => {
+    const isWeekStart = idx === 0 || (cols[idx - 1].weekNum !== c.weekNum);
+    const weekStartClass = isWeekStart ? ' weekstart' : '';
+    const cls = c.isWeekend ? `gantt-hcell day weekend${weekStartClass}` : `gantt-hcell day${weekStartClass}`;
+    html += `<div class="${cls}" style="grid-row:3; grid-column:${idx + 2};">${c.day}<br>${c.dayName}</div>`;
+  });
   html += `</div>`;
 
   groupNames.forEach(name => {
     const tasks = groups.get(name);
     html += `<div class="gantt-row" style="grid-template-columns:${gridCols};">`;
     html += `<div class="gantt-cell gantt-rowlabel" title="${escapeHtml(name)}">${escapeHtml(name)} <span class="gantt-count">(${tasks.length})</span></div>`;
-    cols.forEach(c => {
-      const inCol = tasks
-        .filter(t => bucketOf(t.deadline) === c.key)
-        .sort((a, b) => String(a.deadline || '9999').localeCompare(String(b.deadline || '9999')));
-      const shown = inCol.slice(0, CHIP_LIMIT);
-      const rest = inCol.slice(CHIP_LIMIT);
-      let chips = shown.map(chipHtml).join('');
-      if (rest.length) {
-        chips += `<div class="gantt-more">+${rest.length}件 もっと見る</div>` +
-          `<div class="gantt-extra" style="display:none;">${rest.map(chipHtml).join('')}</div>`;
+    cols.forEach((c, idx) => {
+      const inCol = tasks.filter(t => t.deadline === c.key);
+      const isWeekStart = idx === 0 || (cols[idx - 1].weekNum !== c.weekNum);
+      const weekStartClass = isWeekStart ? ' weekstart' : '';
+      const cellClass = c.isWeekend ? `gantt-cell weekend${weekStartClass}` : `gantt-cell${weekStartClass}`;
+      if (inCol.length === 0) {
+        html += `<div class="${cellClass}"></div>`;
+      } else if (inCol.length === 1) {
+        html += `<div class="${cellClass}">${chipHtml(inCol[0])}</div>`;
+      } else {
+        const totalManhours = inCol.reduce((s,t)=>s+(t.manhours||0),0);
+        const tip = inCol.map(t => `${t.id} (工数:${t.manhours||'?'})`).join('\n');
+        const firstRowAttr = inCol.map(t => t.row).join(',');
+        html += `<div class="${cellClass} gantt-multi" title="${escapeHtml(tip)}" style="background:${manhourHeatColor(totalManhours)};" data-rows="${firstRowAttr}">${inCol.length}件</div>`;
       }
-      html += `<div class="gantt-cell">${chips}</div>`;
     });
     html += `</div>`;
   });
@@ -578,14 +667,11 @@ function renderGantt(list) {
   wrap.querySelectorAll('.gantt-chip').forEach(chip => {
     chip.addEventListener('click', () => openModal(Number(chip.dataset.row)));
   });
-  wrap.querySelectorAll('.gantt-more').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const extra = btn.nextElementSibling;
-      const opening = extra.style.display === 'none';
-      extra.style.display = opening ? 'flex' : 'none';
-      btn.textContent = opening ? '▲ 閉じる' : btn.dataset.label;
+  wrap.querySelectorAll('.gantt-multi').forEach(multi => {
+    multi.addEventListener('click', () => {
+      const rows = multi.dataset.rows.split(',').map(Number);
+      if (rows.length > 0) openModal(rows[0]);
     });
-    btn.dataset.label = btn.textContent;
   });
 }
 
