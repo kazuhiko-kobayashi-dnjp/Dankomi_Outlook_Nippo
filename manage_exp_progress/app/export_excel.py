@@ -23,6 +23,7 @@ import re
 import json
 import zipfile
 import datetime
+from copy import copy
 from pathlib import Path
 
 try:
