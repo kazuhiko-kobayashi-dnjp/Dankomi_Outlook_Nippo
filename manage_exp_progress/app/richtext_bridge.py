@@ -105,6 +105,35 @@ class _RichTextHTMLParser(HTMLParser):
         self.segments.append((text, bool(self._bold), bool(self._underline), color))
 
 
+def _fold_whitespace_only_segments(segments):
+    """空白のみのセグメントを隣接する非空白セグメントに書式を合わせて取り込む。
+
+    openpyxlは空白のみのテキストランに xml:space="preserve" を付与しないため、
+    同じ書式のTextBlockの間に空白のみのプレーンテキストが挟まると、Excelが
+    「文字列プロパティ」の修復エラーを出す既知の不具合がある
+    (openpyxl issue #2298)。空白は見た目に影響しないため、前(無ければ後)の
+    セグメントに書式を合わせて結合し、単独の空白ランを発生させないことで回避する。"""
+    folded = []
+    pending_prefix = ""
+    for text, bold, underline, color in segments:
+        if text.strip() == "":
+            if folded:
+                prev_text, pb, pu, pc = folded[-1]
+                folded[-1] = (prev_text + text, pb, pu, pc)
+            else:
+                pending_prefix += text
+            continue
+        folded.append((pending_prefix + text, bold, underline, color))
+        pending_prefix = ""
+    if pending_prefix:
+        if folded:
+            prev_text, pb, pu, pc = folded[-1]
+            folded[-1] = (prev_text + pending_prefix, pb, pu, pc)
+        else:
+            folded.append((pending_prefix, False, False, None))
+    return folded
+
+
 def html_to_richtext(html_str):
     """HTML文字列をExcelセルに書き込める値(素の文字列 or CellRichText)に変換する。"""
     if not html_str:
@@ -117,8 +146,10 @@ def html_to_richtext(html_str):
     if not parser.segments:
         return None
 
+    folded = _fold_whitespace_only_segments(parser.segments)
+
     merged = []
-    for text, bold, underline, color in parser.segments:
+    for text, bold, underline, color in folded:
         if merged and merged[-1][1:] == (bold, underline, color):
             merged[-1] = (merged[-1][0] + text, bold, underline, color)
         else:
